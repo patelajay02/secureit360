@@ -1,0 +1,373 @@
+# SecureIT360 - Dashboard Routes
+# Country-aware: NZ and AU clients see different regulations and penalties
+# Penalties are indicative only - not legal advice
+
+from fastapi import APIRouter, HTTPException, Header
+from pydantic import BaseModel
+from services.database import supabase, supabase_admin
+from services.score_calculator import calculate_ransom_score, calculate_governance_score
+
+router = APIRouter()
+
+class ScoreRequest(BaseModel):
+    scan_id: str
+
+
+DISCLAIMER = (
+    "The information on this dashboard is for awareness purposes only and does not "
+    "constitute legal advice. Penalty figures are indicative maximums based on current "
+    "legislation as at April 2026 and may vary based on individual circumstances. "
+    "Global Cyber Assurance recommends seeking independent legal advice regarding your "
+    "specific compliance obligations. Contact: governance@secureit360.co"
+)
+
+RESIDUAL_STEPS = [
+    "Staff privacy awareness training",
+    "A documented privacy policy",
+    "An incident response plan",
+    "Regular governance reviews"
+]
+
+
+def get_penalty_info(findings: list, country: str) -> dict:
+    has_critical = any(f["severity"] == "critical" for f in findings)
+    has_moderate = any(f["severity"] == "moderate" for f in findings)
+
+    if country == "AU":
+        if has_critical:
+            return {
+                "ransom_demand": "AUD $85K — $220K (indicative)",
+                "fine_exposure": "🔴 Up to $50M AUD — you have critical issues that must be fixed now",
+                "fine_if_moderate": "🟡 Up to $3.3M AUD — if you fix your critical issues",
+                "fine_if_low": "🟢 Up to $330K AUD — if you fix all critical and moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the AU Privacy Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "High",
+                "key_law": "AU Privacy Act 1988 (amended Dec 2024) + AU Cyber Security Act 2024",
+                "new_risk": "Individuals may now sue your business directly for serious privacy invasion (from June 2025)",
+                "ransom_reporting": "Ransomware payments must be reported to ASD within 72 hours",
+                "disclaimer": DISCLAIMER
+            }
+        elif has_moderate:
+            return {
+                "ransom_demand": "AUD $85K — $220K (indicative)",
+                "fine_exposure": "🟡 Up to $3.3M AUD — you have moderate issues that should be fixed",
+                "fine_if_moderate": None,
+                "fine_if_low": "🟢 Up to $330K AUD — if you fix all moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the AU Privacy Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Medium",
+                "key_law": "AU Privacy Act 1988 (amended Dec 2024) + AU Cyber Security Act 2024",
+                "new_risk": "OAIC can issue compliance notices without going to court",
+                "ransom_reporting": "Ransomware payments must be reported to ASD within 72 hours",
+                "disclaimer": DISCLAIMER
+            }
+        else:
+            return {
+                "ransom_demand": "AUD $85K — $220K (indicative)",
+                "fine_exposure": "🟢 Up to $330K AUD — minor administrative risk only",
+                "fine_if_moderate": None,
+                "fine_if_low": None,
+                "residual_risk": "Minimum regulatory exposure — your technical controls are in place. Residual risk remains because your business still holds personal data which creates ongoing obligations under the AU Privacy Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Low",
+                "key_law": "AU Privacy Act 1988 (amended Dec 2024) + AU Cyber Security Act 2024",
+                "new_risk": "Maintaining low risk reduces OAIC enforcement likelihood significantly",
+                "ransom_reporting": "Ransomware payments must be reported to ASD within 72 hours",
+                "disclaimer": DISCLAIMER
+            }
+
+    elif country == "UAE":
+        if has_critical:
+            return {
+                "ransom_demand": "AED 300K — 800K (indicative)",
+                "fine_exposure": "🔴 Up to AED 5M — you have critical issues that must be fixed now",
+                "fine_if_moderate": "🟡 Up to AED 1M — if you fix your critical issues",
+                "fine_if_low": "🟢 Up to AED 250K — if you fix all critical and moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the UAE PDPL. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "High",
+                "key_law": "UAE PDPL 2021 + UAE NESA Cybersecurity Standards",
+                "new_risk": "UAE regulators actively enforcing PDPL since 2023",
+                "ransom_reporting": "Cyber incidents must be reported to UAE NESA",
+                "disclaimer": DISCLAIMER
+            }
+        elif has_moderate:
+            return {
+                "ransom_demand": "AED 300K — 800K (indicative)",
+                "fine_exposure": "🟡 Up to AED 1M — you have moderate issues that should be fixed",
+                "fine_if_moderate": None,
+                "fine_if_low": "🟢 Up to AED 250K — if you fix all moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the UAE PDPL. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Medium",
+                "key_law": "UAE PDPL 2021 + UAE NESA Cybersecurity Standards",
+                "new_risk": "UAE regulators actively enforcing PDPL since 2023",
+                "ransom_reporting": "Cyber incidents must be reported to UAE NESA",
+                "disclaimer": DISCLAIMER
+            }
+        else:
+            return {
+                "ransom_demand": "AED 300K — 800K (indicative)",
+                "fine_exposure": "🟢 Up to AED 250K — minor administrative risk only",
+                "fine_if_moderate": None,
+                "fine_if_low": None,
+                "residual_risk": "Minimum regulatory exposure — your technical controls are in place. Residual risk remains because your business still holds personal data which creates ongoing obligations under the UAE PDPL.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Low",
+                "key_law": "UAE PDPL 2021 + UAE NESA Cybersecurity Standards",
+                "new_risk": "UAE regulators actively enforcing PDPL since 2023",
+                "ransom_reporting": "Cyber incidents must be reported to UAE NESA",
+                "disclaimer": DISCLAIMER
+            }
+
+    elif country == "IN":
+        if has_critical:
+            return {
+                "ransom_demand": "₹70L — ₹2Cr (indicative)",
+                "fine_exposure": "🔴 Up to ₹250 crore — you have critical issues that must be fixed now",
+                "fine_if_moderate": "🟡 Up to ₹50 crore — if you fix your critical issues",
+                "fine_if_low": "🟢 Up to ₹10 crore — if you fix all critical and moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the India DPDP Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "High",
+                "key_law": "India DPDP Act 2023 + CERT-In Guidelines 2022",
+                "new_risk": "CERT-In actively monitoring and enforcing since 2022",
+                "ransom_reporting": "Cyber incidents must be reported to CERT-In within 6 hours",
+                "disclaimer": DISCLAIMER
+            }
+        elif has_moderate:
+            return {
+                "ransom_demand": "₹70L — ₹2Cr (indicative)",
+                "fine_exposure": "🟡 Up to ₹50 crore — you have moderate issues that should be fixed",
+                "fine_if_moderate": None,
+                "fine_if_low": "🟢 Up to ₹10 crore — if you fix all moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the India DPDP Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Medium",
+                "key_law": "India DPDP Act 2023 + CERT-In Guidelines 2022",
+                "new_risk": "CERT-In actively monitoring and enforcing since 2022",
+                "ransom_reporting": "Cyber incidents must be reported to CERT-In within 6 hours",
+                "disclaimer": DISCLAIMER
+            }
+        else:
+            return {
+                "ransom_demand": "₹70L — ₹2Cr (indicative)",
+                "fine_exposure": "🟢 Up to ₹10 crore — minor administrative risk only",
+                "fine_if_moderate": None,
+                "fine_if_low": None,
+                "residual_risk": "Minimum regulatory exposure — your technical controls are in place. Residual risk remains because your business still holds personal data which creates ongoing obligations under the India DPDP Act.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Low",
+                "key_law": "India DPDP Act 2023 + CERT-In Guidelines 2022",
+                "new_risk": "CERT-In actively monitoring and enforcing since 2022",
+                "ransom_reporting": "Cyber incidents must be reported to CERT-In within 6 hours",
+                "disclaimer": DISCLAIMER
+            }
+
+    else:
+        # NZ default
+        if has_critical:
+            return {
+                "ransom_demand": "NZD $85K — $220K (indicative)",
+                "fine_exposure": "🔴 Director personal liability — you have critical issues that must be fixed now",
+                "fine_if_moderate": "🟡 Privacy Commissioner investigation — if you fix your critical issues",
+                "fine_if_low": "🟢 Minimal exposure — if you fix all critical and moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the NZ Privacy Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "High",
+                "key_law": "NZ Privacy Act 2020 + Privacy Amendment Act 2025 (IPP 3A from May 2026)",
+                "new_risk": "NZ government actively strengthening cyber laws — financial penalties expected soon",
+                "ransom_reporting": "Notifiable breach must be reported to Privacy Commissioner within 72 hours",
+                "disclaimer": DISCLAIMER
+            }
+        elif has_moderate:
+            return {
+                "ransom_demand": "NZD $85K — $220K (indicative)",
+                "fine_exposure": "🟡 Privacy Commissioner investigation — you have moderate issues that should be fixed",
+                "fine_if_moderate": None,
+                "fine_if_low": "🟢 Minimal exposure — if you fix all moderate issues",
+                "residual_risk": "Even after fixing all issues, residual risk remains because your business still holds personal data which creates ongoing obligations under the NZ Privacy Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Medium",
+                "key_law": "NZ Privacy Act 2020 + Privacy Amendment Act 2025 (IPP 3A from May 2026)",
+                "new_risk": "NZ PM publicly called to strengthen cybersecurity laws in February 2026",
+                "ransom_reporting": "Notifiable breach must be reported to Privacy Commissioner within 72 hours",
+                "disclaimer": DISCLAIMER
+            }
+        else:
+            return {
+                "ransom_demand": "NZD $85K — $220K (indicative)",
+                "fine_exposure": "🟢 Minimal current exposure — your technical controls are in place",
+                "fine_if_moderate": None,
+                "fine_if_low": None,
+                "residual_risk": "Residual risk remains because your business still holds personal data which creates ongoing obligations under the NZ Privacy Act. Technical fixes alone cannot eliminate this risk.",
+                "residual_steps": RESIDUAL_STEPS,
+                "downtime": "14 — 28 days",
+                "liability": "Low",
+                "key_law": "NZ Privacy Act 2020 + Privacy Amendment Act 2025 (IPP 3A from May 2026)",
+                "new_risk": "NZ government reviewing financial penalties — act now before laws strengthen",
+                "ransom_reporting": "Notifiable breach must be reported to Privacy Commissioner within 72 hours",
+                "disclaimer": DISCLAIMER
+            }
+
+
+def calculate_compliance_scores(findings: list, country: str) -> dict:
+    def score_for_engines(engines: list) -> int:
+        score = 100
+        for f in findings:
+            if f["engine"] in engines:
+                if f["severity"] == "critical":
+                    score -= 30
+                elif f["severity"] == "moderate":
+                    score -= 15
+                elif f["severity"] == "low" and f["score_impact"] > 0:
+                    score -= 5
+        return max(0, min(100, score))
+
+    if country == "AU":
+        return {
+            "au_privacy": score_for_engines(["darkweb", "email", "cloud", "website"]),
+            "au_privacy_amendment": score_for_engines(["darkweb", "cloud", "email"]),
+            "au_corporations": score_for_engines(["darkweb", "network", "devices", "email", "website", "cloud"]),
+            "au_cyber_security_act": score_for_engines(["network", "devices", "cloud"]),
+            "essential_eight": score_for_engines(["email", "devices", "network", "website"]),
+            "iso_27001": score_for_engines(["darkweb", "email", "network", "website", "devices", "cloud"]),
+        }
+    elif country == "UAE":
+        return {
+            "uae_pdpl": score_for_engines(["darkweb", "email", "cloud", "website"]),
+            "uae_nesa": score_for_engines(["network", "devices", "cloud"]),
+            "iso_27001": score_for_engines(["darkweb", "email", "network", "website", "devices", "cloud"]),
+        }
+    elif country == "IN":
+        return {
+            "india_dpdp": score_for_engines(["darkweb", "email", "cloud", "website"]),
+            "cert_in": score_for_engines(["network", "devices", "cloud"]),
+            "iso_27001": score_for_engines(["darkweb", "email", "network", "website", "devices", "cloud"]),
+        }
+    else:
+        return {
+            "nz_privacy": score_for_engines(["darkweb", "email", "cloud", "website"]),
+            "nz_privacy_amendment": score_for_engines(["darkweb", "cloud"]),
+            "nz_companies": score_for_engines(["darkweb", "network", "devices", "email", "website", "cloud"]),
+            "nz_ncsc": score_for_engines(["email", "network", "website"]),
+            "essential_eight": score_for_engines(["email", "devices", "network", "website"]),
+            "iso_27001": score_for_engines(["darkweb", "email", "network", "website", "devices", "cloud"]),
+        }
+
+
+@router.get("/")
+def get_dashboard(authorization: str = Header(...)):
+    try:
+        token = authorization.replace("Bearer ", "")
+        user = supabase.auth.get_user(token)
+        user_id = user.user.id
+
+        tenant_user = supabase_admin.table("tenant_users")\
+            .select("tenant_id, role, tenants(*)")\
+            .eq("user_id", user_id)\
+            .eq("status", "active")\
+            .single()\
+            .execute()
+
+        tenant_id = tenant_user.data["tenant_id"]
+        company_name = tenant_user.data["tenants"]["name"]
+        plan = tenant_user.data["tenants"]["plan"]
+        country = tenant_user.data["tenants"].get("country", "NZ")
+
+        latest_scan = supabase_admin.table("scans")\
+            .select("*")\
+            .eq("tenant_id", tenant_id)\
+            .eq("status", "complete")\
+            .order("completed_at", desc=True)\
+            .limit(1)\
+            .execute()
+
+        if not latest_scan.data:
+            return {
+                "company_name": company_name,
+                "plan": plan,
+                "country": country,
+                "message": "No scans completed yet.",
+                "ransom_score": None,
+                "governance_score": None
+            }
+
+        scan = latest_scan.data[0]
+
+        findings = supabase_admin.table("findings")\
+            .select("*")\
+            .eq("tenant_id", tenant_id)\
+            .eq("status", "open")\
+            .order("score_impact", desc=True)\
+            .execute()
+
+        critical = [f for f in findings.data if f["severity"] == "critical"]
+        moderate = [f for f in findings.data if f["severity"] == "moderate"]
+        low = [f for f in findings.data if f["severity"] == "low"]
+
+        compliance = calculate_compliance_scores(findings.data, country)
+        penalty_info = get_penalty_info(findings.data, country)
+
+        return {
+            "company_name": company_name,
+            "plan": plan,
+            "country": country,
+            "ransom_score": scan.get("ransom_score"),
+            "risk_label": scan.get("risk_label"),
+            "governance_score": scan.get("governance_score"),
+            "last_scan": scan.get("completed_at"),
+            "findings_summary": {
+                "critical": len(critical),
+                "moderate": len(moderate),
+                "low": len(low),
+                "total": len(findings.data)
+            },
+            "top_findings": findings.data[:5],
+            "compliance": compliance,
+            "penalty_info": penalty_info
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/calculate-score")
+def calculate_score(data: ScoreRequest, authorization: str = Header(...)):
+    try:
+        token = authorization.replace("Bearer ", "")
+        user = supabase.auth.get_user(token)
+        user_id = user.user.id
+
+        tenant_user = supabase_admin.table("tenant_users")\
+            .select("tenant_id")\
+            .eq("user_id", user_id)\
+            .eq("status", "active")\
+            .single()\
+            .execute()
+
+        tenant_id = tenant_user.data["tenant_id"]
+
+        ransom_result = calculate_ransom_score(tenant_id, data.scan_id)
+        governance_result = calculate_governance_score(tenant_id, data.scan_id)
+
+        return {
+            "message": "Scores calculated successfully",
+            "ransom_risk": ransom_result,
+            "governance": governance_result
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
