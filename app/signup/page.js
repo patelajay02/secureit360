@@ -168,7 +168,7 @@ export default function SignupPage() {
                 value={form.company_name}
                 onChange={handleChange}
                 required
-                placeholder="Acme Plumbing Ltd"
+                placeholder="Your company name"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
               />
             </div>
