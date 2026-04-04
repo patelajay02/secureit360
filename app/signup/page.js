@@ -268,7 +268,7 @@ export default function SignupPage() {
             <div className="flex justify-center">
               <ReCAPTCHA
                 ref={recaptchaRef}
-                sitekey="6LdauaQsAAAAIYiNTrpC1_iE4jZYlXkMCJrCeYF"
+                sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
                 theme="dark"
               />
             </div>
