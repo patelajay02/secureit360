@@ -125,21 +125,22 @@ function VoiceGuideModal({ finding, onClose }: { finding: any, onClose: () => vo
   function handleNext() {
     const next = currentStep + 1
     if (next >= steps.length) return
+    window.speechSynthesis.cancel()
+    setCurrentStep(next)
     if (speaking) {
-      setSpeaking(true)
       setTimeout(() => speakStep(next), 200)
-    } else {
-      setCurrentStep(next)
     }
   }
 
   function handlePrev() {
     const prev = currentStep - 1
     if (prev < 0) return
+    window.speechSynthesis.cancel()
+    setCurrentStep(prev)
     if (speaking) {
-      setSpeaking(true)
       setTimeout(() => speakStep(prev), 200)
-    } else {
+    }
+  } else {
       setCurrentStep(prev)
     }
   }
@@ -668,3 +669,4 @@ export default function DashboardPage() {
     </main>
   )
 }
+
