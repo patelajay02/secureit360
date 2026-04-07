@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,7 @@ const PRICING = {
   NZ:  { currency: "NZD", symbol: "$", starter: 250,    pro: 500,    enterprise: 840    },
   AU:  { currency: "AUD", symbol: "$", starter: 299,    pro: 599,    enterprise: 999    },
   IN:  { currency: "INR", symbol: "₹", starter: 12500,  pro: 25000,  enterprise: 42000  },
-  UAE: { currency: "AED", symbol: "AED", starter: 549,  pro: 1099,   enterprise: 1849   },
+  UAE: { currency: "AED", symbol: "AED ", starter: 549, pro: 1099,   enterprise: 1849   },
   OTHER: { currency: "USD", symbol: "$", starter: 149,  pro: 299,    enterprise: 499    },
 };
 
@@ -66,12 +66,15 @@ export default function PricingPage() {
   const [error, setError] = useState("");
   const [pricing, setPricing] = useState(PRICING.NZ);
   const [country, setCountry] = useState("NZ");
+  const [userStatus, setUserStatus] = useState("trial");
 
   useEffect(() => {
     const token = getToken();
     if (!token) { router.push("/"); return; }
     const c = localStorage.getItem("country") || "NZ";
+    const s = localStorage.getItem("status") || "trial";
     setCountry(c);
+    setUserStatus(s);
     setPricing(PRICING[c] || PRICING.OTHER);
   }, []);
 
@@ -89,12 +92,20 @@ export default function PricingPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.detail || "Could not start checkout. Please try again."); return; }
-      window.location.href = data.url;
+      window.location.href = data.checkout_url || data.url;
     } catch (e) {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(null);
     }
+  };
+
+  const getButtonLabel = (planKey) => {
+    if (loading === planKey) return "Redirecting...";
+    if (userStatus === "trial") return "Start 7-day free trial";
+    if (userStatus === "past_due") return "Reactivate — Subscribe Now";
+    if (userStatus === "cancelled") return "Resubscribe Now";
+    return "Subscribe Now";
   };
 
   const plans = [
@@ -113,7 +124,19 @@ export default function PricingPage() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">Choose your plan</h2>
-          <p className="text-gray-400 text-lg">All plans include a 7-day free trial. Cancel anytime.</p>
+          {userStatus === "past_due" && (
+            <div className="bg-amber-900/30 border border-amber-700 text-amber-300 rounded-lg p-4 mb-6 max-w-lg mx-auto">
+              Your last payment failed. Please resubscribe to restore full access.
+            </div>
+          )}
+          {userStatus === "cancelled" && (
+            <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg p-4 mb-6 max-w-lg mx-auto">
+              Your subscription has been cancelled. Resubscribe below to restore access.
+            </div>
+          )}
+          {userStatus === "trial" && (
+            <p className="text-gray-400 text-lg">All plans include a 7-day free trial. Cancel anytime.</p>
+          )}
           <p className="text-gray-500 text-sm mt-2">Prices shown in {pricing.currency} + GST</p>
         </div>
 
@@ -150,7 +173,7 @@ export default function PricingPage() {
                 disabled={loading === plan.key}
                 className={`w-full py-3 rounded-lg font-semibold text-sm transition ${plan.popular ? "bg-red-600 hover:bg-red-700 text-white" : "bg-gray-800 hover:bg-gray-700 text-white"} disabled:opacity-50`}
               >
-                {loading === plan.key ? "Redirecting..." : "Start 7-day free trial"}
+                {getButtonLabel(plan.key)}
               </button>
             </div>
           ))}
