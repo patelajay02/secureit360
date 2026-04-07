@@ -25,7 +25,7 @@ class LoginRequest(BaseModel):
     password: str
 
 
-# ─── REGISTER ───────────────────────────────────────────────────────────────
+# --- REGISTER -----------------------------------------------------------
 
 @router.post("/register")
 def register(data: RegisterRequest):
@@ -72,7 +72,6 @@ def register(data: RegisterRequest):
             "verified": False
         }).execute()
 
-        # Send email in background thread so registration is not blocked
         company_name = data.company_name
         email = data.email
 
@@ -90,7 +89,7 @@ def register(data: RegisterRequest):
                 message = Mail(
                     from_email=os.getenv("SENDGRID_FROM_EMAIL"),
                     to_emails=email,
-                    subject="Welcome to SecureIT360 — Please verify your email",
+                    subject="Welcome to SecureIT360 - Please verify your email",
                     html_content=f"""
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                             <h2 style="color: #dc2626;">Welcome to SecureIT360!</h2>
@@ -129,7 +128,7 @@ def register(data: RegisterRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ─── LOGIN ───────────────────────────────────────────────────────────────────
+# --- LOGIN --------------------------------------------------------------
 
 @router.post("/login")
 def login(data: LoginRequest):
@@ -143,6 +142,7 @@ def login(data: LoginRequest):
         if not auth_response.session:
             raise HTTPException(status_code=401, detail="Invalid login credentials")
         token = auth_response.session.access_token
+        refresh_token = auth_response.session.refresh_token
 
         tenant_user = supabase_admin.table("tenant_users")\
             .select("*, tenants(*)")\
@@ -153,6 +153,7 @@ def login(data: LoginRequest):
 
         return {
             "token": token,
+            "refresh_token": refresh_token,
             "user_id": user_id,
             "email": data.email,
             "tenant_id": tenant_user.data["tenant_id"],
@@ -167,7 +168,31 @@ def login(data: LoginRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ─── DELETE USER (authenticated) ─────────────────────────────────────────────
+# --- REFRESH TOKEN ------------------------------------------------------
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+@router.post("/refresh")
+def refresh_token(data: RefreshRequest):
+    try:
+        session = supabase.auth.refresh_session(data.refresh_token)
+        if not session or not session.session:
+            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+        return {
+            "token": session.session.access_token,
+            "refresh_token": session.session.refresh_token
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[REFRESH ERROR] {str(e)}")
+        raise HTTPException(status_code=401, detail="Could not refresh session")
+
+
+# --- DELETE USER (authenticated) ----------------------------------------
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, authorization: str = Header(...)):
@@ -179,7 +204,7 @@ def delete_user(user_id: str, authorization: str = Header(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ─── INVITE USER ─────────────────────────────────────────────────────────────
+# --- INVITE USER --------------------------------------------------------
 
 @router.post("/invite")
 def invite_user(data: dict, authorization: str = Header(...)):
@@ -233,7 +258,7 @@ def invite_user(data: dict, authorization: str = Header(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ─── GET USERS ───────────────────────────────────────────────────────────────
+# --- GET USERS ----------------------------------------------------------
 
 @router.get("/users")
 def get_users(authorization: str = Header(...)):
@@ -262,7 +287,7 @@ def get_users(authorization: str = Header(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ─── ADMIN — LIST ALL USERS ──────────────────────────────────────────────────
+# --- ADMIN - LIST ALL USERS ---------------------------------------------
 
 @router.get("/admin/users")
 def admin_get_users():
@@ -292,7 +317,7 @@ def admin_get_users():
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ─── ADMIN — DELETE USER ─────────────────────────────────────────────────────
+# --- ADMIN - DELETE USER ------------------------------------------------
 
 @router.delete("/admin/delete/{user_id}")
 def admin_delete_user(user_id: str):
