@@ -1,9 +1,3 @@
-// app/dashboard/scanning/page.js
-// SecureIT360 - Domain verification + scan page
-// Step 1: Add domain
-// Step 2: Verify ownership via DNS TXT record
-// Step 3: Run Dark Web + Email Security scans only (free trial)
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -32,19 +26,43 @@ function StatusIcon({ status }) {
 
 export default function ScanningPage() {
   const router = useRouter();
-  const [step, setStep] = useState("add_domain"); // add_domain | verify | scanning | done
+  const [step, setStep] = useState("loading");
   const [domain, setDomain] = useState("");
   const [domainId, setDomainId] = useState(null);
   const [verifyToken, setVerifyToken] = useState(null);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [statuses, setStatuses] = useState({ darkweb: "pending", email: "pending" });
-  const [scanId, setScanId] = useState(null);
 
   useEffect(() => {
     const token = getToken();
-    if (!token) router.push("/");
+    if (!token) { router.push("/"); return; }
+    checkExistingDomain();
   }, []);
+
+  const checkExistingDomain = async () => {
+    try {
+      const res = await authFetch("/domains/");
+      const data = await res.json();
+      const verified = data.domains?.find(d => d.verified === true);
+      if (verified) {
+        setDomainId(verified.id);
+        setDomain(verified.domain);
+        setStep("scanning");
+        runScans(verified.id);
+      } else if (data.domains?.length > 0) {
+        const unverified = data.domains[0];
+        setDomainId(unverified.id);
+        setDomain(unverified.domain);
+        setVerifyToken(unverified.verify_token);
+        setStep("verify");
+      } else {
+        setStep("add_domain");
+      }
+    } catch (e) {
+      setStep("add_domain");
+    }
+  };
 
   const handleAddDomain = async () => {
     setError("");
@@ -69,7 +87,7 @@ export default function ScanningPage() {
       const data = await res.json();
       if (data.verified) {
         setStep("scanning");
-        runScans();
+        runScans(domainId);
       } else {
         setError(data.message || "TXT record not found yet. Please wait a few minutes and try again.");
       }
@@ -80,11 +98,12 @@ export default function ScanningPage() {
     }
   };
 
-  const runScans = async () => {
+  const runScans = async (did) => {
+    const id = did || domainId;
     for (const engine of FREE_ENGINES) {
       setStatuses(prev => ({ ...prev, [engine.key]: "running" }));
       try {
-        await authFetch(`/scans/${engine.key}`, { method: "POST", body: JSON.stringify({ domain_id: domainId }) });
+        await authFetch(`/scans/${engine.key}`, { method: "POST", body: JSON.stringify({ domain_id: id }) });
       } catch (e) {
         console.error(`${engine.key} scan failed`, e);
       }
@@ -95,7 +114,14 @@ export default function ScanningPage() {
 
   const completed = Object.values(statuses).filter(s => s === "complete").length;
 
-  // STEP 1 - Add domain
+  if (step === "loading") {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <p className="text-gray-400">Loading...</p>
+      </div>
+    );
+  }
+
   if (step === "add_domain") {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -116,16 +142,13 @@ export default function ScanningPage() {
               className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-red-500"
             />
             {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-            <button onClick={handleAddDomain} className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg">
-              Continue
-            </button>
+            <button onClick={handleAddDomain} className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg">Continue</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // STEP 2 - Verify domain ownership
   if (step === "verify") {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -136,7 +159,6 @@ export default function ScanningPage() {
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
             <p className="text-white font-medium mb-4">Before we can scan <span className="text-red-400">{domain}</span>, we need to confirm you own it.</p>
-
             <div className="bg-gray-800 rounded-xl p-4 mb-6">
               <p className="text-gray-400 text-sm font-medium mb-3">Follow these steps:</p>
               <ol className="space-y-3 text-sm text-gray-300">
@@ -145,32 +167,15 @@ export default function ScanningPage() {
                 <li className="flex gap-2"><span className="text-red-400 font-bold">3.</span> Add a new TXT record with these exact details:</li>
               </ol>
               <div className="bg-gray-900 rounded-lg p-4 mt-3 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Type</span>
-                  <span className="text-white font-mono">TXT</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Name / Host</span>
-                  <span className="text-white font-mono">@</span>
-                </div>
-                <div className="flex flex-col text-sm gap-1">
-                  <span className="text-gray-500">Value</span>
-                  <span className="text-green-400 font-mono text-xs break-all">{verifyToken}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">TTL</span>
-                  <span className="text-white font-mono">3600 (or Default)</span>
-                </div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Type</span><span className="text-white font-mono">TXT</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Name / Host</span><span className="text-white font-mono">@</span></div>
+                <div className="flex flex-col text-sm gap-1"><span className="text-gray-500">Value</span><span className="text-green-400 font-mono text-xs break-all">{verifyToken}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">TTL</span><span className="text-white font-mono">3600 (or Default)</span></div>
               </div>
               <p className="text-gray-500 text-xs mt-3">Not sure how to do this? Email <a href="mailto:governance@secureit360.co" className="text-gray-400 underline">governance@secureit360.co</a> and we will walk you through it.</p>
             </div>
-
             {error && <p className="text-amber-400 text-sm mb-4">{error}</p>}
-            <button
-              onClick={handleCheckVerification}
-              disabled={checking}
-              className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg"
-            >
+            <button onClick={handleCheckVerification} disabled={checking} className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg">
               {checking ? "Checking..." : "I have added the TXT record - verify now"}
             </button>
             <p className="text-gray-600 text-xs mt-3 text-center">DNS changes can take up to 30 minutes to take effect</p>
@@ -180,13 +185,12 @@ export default function ScanningPage() {
     );
   }
 
-  // STEP 3 - Scanning
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-white">SecureIT<span className="text-red-500">360</span></h1>
-          <p className="text-gray-400 mt-2">Step 3 of 3 - Scanning your domain</p>
+          <p className="text-gray-400 mt-2">Scanning {domain}</p>
           <p className="text-gray-500 text-sm mt-1">This takes about 60 seconds - please do not close this page</p>
         </div>
         <div className="mb-8">

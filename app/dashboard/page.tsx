@@ -201,7 +201,7 @@ export default function DashboardPage() {
           <p className="text-gray-400 mt-1">Here is your current cyber security status at a glance.</p>
         </div>
 
-        {!dashboard?.ransom_score && !dashboard?.findings_summary && (
+        {!dashboard?.findings_summary && (
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 text-center mb-8">
             <p className="text-gray-300 text-lg mb-2">No scans completed yet.</p>
             <p className="text-gray-500 mb-6">Run your first scan to see your security risk score, compliance status, and what needs fixing.</p>
@@ -415,7 +415,7 @@ export default function DashboardPage() {
           </div>
         )}
         <p className="text-center text-gray-700 text-xs mt-8">
-          Â© 2026 Global Cyber Assurance. All rights reserved.
+          Ã‚Â© 2026 Global Cyber Assurance. All rights reserved.
         </p>
 
       </div>
