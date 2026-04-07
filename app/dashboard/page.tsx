@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 const VOICE_GUIDE_STEPS: Record<string, string[]> = {
@@ -21,7 +21,7 @@ const VOICE_GUIDE_STEPS: Record<string, string[]> = {
   "Your website security certificate is invalid or missing": [
     "Contact your website hosting provider and ask them to install or renew your SSL certificate.",
     "If you use Cloudflare, enable SSL in your dashboard under the SSL/TLS section.",
-    "If you manage your own server, use Let's Encrypt to get a free SSL certificate.",
+    "If you manage your own server, use Lets Encrypt to get a free SSL certificate.",
     "Once installed, visit your website and confirm the padlock icon appears in the browser address bar.",
     "Run your scan again to confirm this issue is resolved."
   ],
@@ -62,74 +62,203 @@ function getVoiceSteps(title: string): string[] {
 
 function VoiceGuideModal({ finding, onClose }: { finding: any, onClose: () => void }) {
   const [speaking, setSpeaking] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [done, setDone] = useState<boolean[]>([])
   const steps = getVoiceSteps(finding.title)
-  const fullScript = finding.title + '. Here is how to fix this. ' + steps.map((s, i) => 'Step ' + (i + 1) + '. ' + s).join(' ')
 
   useEffect(() => {
     window.speechSynthesis.getVoices()
-    return () => {
-      window.speechSynthesis.cancel()
-    }
+    setDone(new Array(steps.length).fill(false))
+    return () => { window.speechSynthesis.cancel() }
   }, [])
+
+  function speakStep(stepIndex: number) {
+    window.speechSynthesis.cancel()
+    if (stepIndex >= steps.length) {
+      setSpeaking(false)
+      setPaused(false)
+      return
+    }
+    setCurrentStep(stepIndex)
+    const text = 'Step ' + (stepIndex + 1) + ' of ' + steps.length + '. ' + steps[stepIndex]
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.rate = 0.8
+    utterance.pitch = 1
+    utterance.volume = 1
+    const voices = window.speechSynthesis.getVoices()
+    const english = voices.find((v) => v.lang === 'en-GB') || voices.find((v) => v.lang.startsWith('en')) || voices[0]
+    if (english) utterance.voice = english
+    utterance.onend = () => {
+      const next = stepIndex + 1
+      if (next < steps.length) {
+        speakStep(next)
+      } else {
+        setSpeaking(false)
+        setPaused(false)
+      }
+    }
+    utterance.onerror = () => setSpeaking(false)
+    window.speechSynthesis.speak(utterance)
+  }
 
   function handlePlay() {
     if (speaking) {
       window.speechSynthesis.cancel()
       setSpeaking(false)
+      setPaused(true)
       return
     }
+    setSpeaking(true)
+    setPaused(false)
+    setTimeout(() => speakStep(currentStep), 200)
+  }
+
+  function handlePlayAgain() {
     window.speechSynthesis.cancel()
-    setTimeout(() => {
-      const utterance = new SpeechSynthesisUtterance(fullScript)
-      utterance.rate = 0.9
-      utterance.pitch = 1
-      utterance.volume = 1
-      const voices = window.speechSynthesis.getVoices()
-      const english = voices.find((v) => v.lang === 'en-GB') || voices.find((v) => v.lang.startsWith('en')) || voices[0]
-      if (english) utterance.voice = english
-      utterance.onend = () => setSpeaking(false)
-      utterance.onerror = () => setSpeaking(false)
-      window.speechSynthesis.speak(utterance)
+    setCurrentStep(0)
+    setPaused(false)
+    setSpeaking(true)
+    setTimeout(() => speakStep(0), 200)
+  }
+
+  function handleNext() {
+    const next = currentStep + 1
+    if (next >= steps.length) return
+    if (speaking) {
       setSpeaking(true)
-    }, 200)
+      setTimeout(() => speakStep(next), 200)
+    } else {
+      setCurrentStep(next)
+    }
+  }
+
+  function handlePrev() {
+    const prev = currentStep - 1
+    if (prev < 0) return
+    if (speaking) {
+      setSpeaking(true)
+      setTimeout(() => speakStep(prev), 200)
+    } else {
+      setCurrentStep(prev)
+    }
+  }
+
+  function toggleDone(i: number) {
+    const updated = [...done]
+    updated[i] = !updated[i]
+    setDone(updated)
   }
 
   function handleClose() {
     window.speechSynthesis.cancel()
     setSpeaking(false)
+    setPaused(false)
+    setCurrentStep(0)
     onClose()
   }
+
+  const completedCount = done.filter(Boolean).length
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-lg w-full max-h-screen overflow-y-auto">
+
         <div className="flex justify-between items-start mb-4">
           <h3 className="text-white font-semibold text-lg pr-4">{finding.title}</h3>
           <button onClick={handleClose} className="text-gray-500 hover:text-white text-xl flex-shrink-0">X</button>
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-4 mb-6 text-center">
-          <p className="text-gray-400 text-sm mb-3">Click play to hear how to fix this issue</p>
-          <button
-            onClick={handlePlay}
-            className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${speaking ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'}`}
-          >
-            {speaking ? 'Stop' : 'Play voice guide'}
-          </button>
-          {speaking && <p className="text-green-400 text-xs mt-2">Speaking...</p>}
+        <div className="bg-gray-800 rounded-xl p-4 mb-4">
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-gray-400 text-sm">
+              {speaking
+                ? 'Reading step ' + (currentStep + 1) + ' of ' + steps.length
+                : paused
+                ? 'Paused at step ' + (currentStep + 1) + ' of ' + steps.length
+                : 'Step ' + (currentStep + 1) + ' of ' + steps.length}
+            </p>
+            <span className="text-xs text-green-400 font-medium">{completedCount} of {steps.length} done</span>
+          </div>
+
+          <div className="w-full bg-gray-700 rounded-full h-1.5 mb-4">
+            <div
+              className="bg-green-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${(completedCount / steps.length) * 100}%` }}
+            />
+          </div>
+
+          <div className="flex justify-center gap-2 flex-wrap">
+            <button
+              onClick={handlePrev}
+              disabled={currentStep === 0}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              Prev
+            </button>
+            <button
+              onClick={handlePlay}
+              className={`px-5 py-2 rounded-lg font-semibold text-white text-sm transition-colors ${speaking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700'}`}
+            >
+              {speaking ? 'Pause' : paused ? 'Resume' : 'Play'}
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={currentStep >= steps.length - 1}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+            <button
+              onClick={handlePlayAgain}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-600 hover:bg-gray-500 transition-colors"
+            >
+              Restart
+            </button>
+          </div>
+          {speaking && <p className="text-green-400 text-xs mt-3 text-center">Speaking step {currentStep + 1}...</p>}
         </div>
 
         <div>
-          <h4 className="text-gray-300 font-medium mb-3 text-sm uppercase tracking-wide">Step-by-step instructions</h4>
-          <ol className="space-y-3">
+          <h4 className="text-gray-300 font-medium mb-3 text-sm uppercase tracking-wide">Steps</h4>
+          <ol className="space-y-2">
             {steps.map((step, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="bg-red-900/50 text-red-300 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                <p className="text-gray-300 text-sm leading-relaxed">{step}</p>
+              <li
+                key={i}
+                className={`flex gap-3 rounded-lg p-3 transition-colors border ${
+                  i === currentStep && speaking
+                    ? 'bg-red-900/20 border-red-900/40'
+                    : done[i]
+                    ? 'bg-green-900/10 border-green-900/30'
+                    : 'border-transparent'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={done[i] || false}
+                  onChange={() => toggleDone(i)}
+                  className="mt-1 flex-shrink-0 accent-green-500 w-4 h-4 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <span className={`text-xs font-bold mr-2 ${i === currentStep && speaking ? 'text-red-400' : 'text-gray-500'}`}>
+                    {i + 1}.
+                  </span>
+                  <span className={`text-sm leading-relaxed ${
+                    done[i] ? 'line-through text-gray-500' :
+                    i === currentStep && speaking ? 'text-white font-medium' : 'text-gray-300'
+                  }`}>{step}</span>
+                </div>
               </li>
             ))}
           </ol>
         </div>
+
+        {completedCount === steps.length && (
+          <div className="mt-4 bg-green-900/30 border border-green-800 rounded-xl p-4 text-center">
+            <p className="text-green-400 font-semibold text-sm">All steps completed!</p>
+            <p className="text-gray-400 text-xs mt-1">Run your scan again to confirm this issue is resolved.</p>
+          </div>
+        )}
 
         <div className="mt-6 pt-4 border-t border-gray-800">
           <p className="text-gray-500 text-xs">Need more help? Email <a href="mailto:governance@secureit360.co" className="text-gray-400 underline">governance@secureit360.co</a> and a specialist will walk you through this personally.</p>
