@@ -407,7 +407,7 @@ export default function DashboardPage() {
         )}
 
         <p className="text-center text-gray-700 text-xs mt-8">
-          © 2026 Global Cyber Assurance. All rights reserved.
+          Â© 2026 Global Cyber Assurance. All rights reserved.
         </p>
 
       </div>
