@@ -1,4 +1,4 @@
-# SecureIT360 - Authentication Routes
+﻿# SecureIT360 - Authentication Routes
 import threading
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
@@ -38,7 +38,6 @@ def register(data: RegisterRequest):
                 detail=f"Your email must match your company domain. Expected an email ending in @{company_domain}"
             )
 
-        # Block duplicate domain registration
         existing_domain = supabase_admin.table("domains")\
             .select("id")\
             .eq("domain", company_domain)\
@@ -164,9 +163,10 @@ def login(data: LoginRequest):
             .execute()
 
         tenant = tenant_user.data["tenants"]
+        tenant_status = tenant.get("status")
 
-        # Check if trial has expired and no active subscription
-        if tenant.get("status") == "trial":
+        # Check if trial has expired
+        if tenant_status == "trial":
             trial_ends_at = tenant.get("trial_ends_at")
             if trial_ends_at:
                 trial_end = datetime.fromisoformat(trial_ends_at.replace("Z", "+00:00"))
@@ -175,6 +175,20 @@ def login(data: LoginRequest):
                         status_code=403,
                         detail="Your free trial has expired. Please subscribe to continue at app.secureit360.co/pricing"
                     )
+
+        # Check if subscription is cancelled
+        if tenant_status == "cancelled":
+            raise HTTPException(
+                status_code=403,
+                detail="Your subscription has been cancelled. Please resubscribe at app.secureit360.co/pricing"
+            )
+
+        # Check if subscription is past due
+        if tenant_status == "past_due":
+            raise HTTPException(
+                status_code=403,
+                detail="Your last payment failed. Please update your payment details at app.secureit360.co/pricing"
+            )
 
         return {
             "token": token,
@@ -185,7 +199,7 @@ def login(data: LoginRequest):
             "role": tenant_user.data["role"],
             "company_name": tenant["name"],
             "plan": tenant.get("plan"),
-            "status": tenant.get("status"),
+            "status": tenant_status,
             "trial_ends_at": tenant.get("trial_ends_at"),
             "country": tenant.get("country", "NZ"),
             "mobile": tenant.get("mobile", "")
