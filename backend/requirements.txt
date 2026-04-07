@@ -9,3 +9,8 @@ python-jose
 passlib
 bcrypt
 shodan
+stripe
+requests
+cryptography
+pydantic
+pydantic-settings
