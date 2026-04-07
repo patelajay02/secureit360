@@ -1,8 +1,49 @@
 # SecureIT360 - Email Security Scan Engine
-# Checks DMARC, SPF and DKIM records with specific regulation clauses
+# Checks DMARC, SPF and DKIM records with specific regulation clause references
 
 import httpx
 from services.database import supabase_admin
+
+
+def upsert_finding(tenant_id, scan_id, engine, severity, title, description, governance_gap, regulations, fix_type, score_impact):
+    existing = supabase_admin.table("findings")\
+        .select("id")\
+        .eq("tenant_id", tenant_id)\
+        .eq("engine", engine)\
+        .eq("title", title)\
+        .execute()
+
+    if existing.data:
+        supabase_admin.table("findings")\
+            .update({
+                "scan_id": scan_id,
+                "severity": severity,
+                "description": description,
+                "governance_gap": governance_gap,
+                "regulations": regulations,
+                "fix_type": fix_type,
+                "score_impact": score_impact,
+                "status": "open"
+            })\
+            .eq("id", existing.data[0]["id"])\
+            .execute()
+        return False
+    else:
+        supabase_admin.table("findings").insert({
+            "tenant_id": tenant_id,
+            "scan_id": scan_id,
+            "engine": engine,
+            "severity": severity,
+            "title": title,
+            "description": description,
+            "governance_gap": governance_gap,
+            "regulations": regulations,
+            "fix_type": fix_type,
+            "score_impact": score_impact,
+            "status": "open"
+        }).execute()
+        return True
+
 
 async def check_email_security(domain: str) -> dict:
     results = {
@@ -13,7 +54,6 @@ async def check_email_security(domain: str) -> dict:
 
     try:
         async with httpx.AsyncClient() as client:
-            # Check DMARC record
             dmarc_response = await client.get(
                 f"https://dns.google/resolve?name=_dmarc.{domain}&type=TXT",
                 timeout=15
@@ -25,7 +65,6 @@ async def check_email_security(domain: str) -> dict:
                     if "v=DMARC1" in answer.get("data", ""):
                         results["dmarc"] = True
 
-            # Check SPF record
             spf_response = await client.get(
                 f"https://dns.google/resolve?name={domain}&type=TXT",
                 timeout=15
@@ -48,62 +87,49 @@ async def run_email_scan(tenant_id: str, scan_id: str, domain: str):
         findings_count = 0
         email_security = await check_email_security(domain)
 
-        # No DMARC - critical finding
         if not email_security["dmarc"]:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "email",
-                "severity": "critical",
-                "title": "Scammers can send emails pretending to be your business",
-                "description": (
+            is_new = upsert_finding(
+                tenant_id, scan_id, "email", "critical",
+                "Scammers can send emails pretending to be your business",
+                (
                     f"Your domain {domain} has no DMARC record. "
                     f"This means anyone on the internet can send emails that look like "
                     f"they come from your business. Scammers use this to trick your "
                     f"clients and staff into sending money or clicking dangerous links. "
                     f"This is one of the most common ways businesses lose money to fraud."
                 ),
-                "governance_gap": "No email security policy exists. Your business has no protection against email impersonation attacks.",
-                "regulations": [
-                    "AU Essential Eight ML1 — Email hardening (DMARC required)",
-                    "NZ NCSC Guidelines — Email security baseline",
-                    "AU Privacy Act 1988 — APP 11.1 (security of personal information)",
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+                "No email security policy exists. Your business has no protection against email impersonation attacks.",
+                [
+                    "AU Essential Eight ML1 - Email hardening (DMARC required)",
+                    "NZ NCSC Guidelines - Email security baseline",
+                    "AU Privacy Act 1988 - APP 11.1 (security of personal information)",
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
                 ],
-                "fix_type": "voice",
-                "score_impact": 12,
-                "status": "open"
-            }).execute()
+                "voice", 12
+            )
             findings_count += 1
 
-        # No SPF - moderate finding
         if not email_security["spf"]:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "email",
-                "severity": "moderate",
-                "title": "Your email domain has no sender protection",
-                "description": (
+            is_new = upsert_finding(
+                tenant_id, scan_id, "email", "moderate",
+                "Your email domain has no sender protection",
+                (
                     f"Your domain {domain} has no SPF record. "
                     f"SPF tells email providers which servers are allowed to send "
                     f"emails from your domain. Without it, your emails may go to "
                     f"spam and scammers can more easily impersonate your business."
                 ),
-                "governance_gap": "No email security policy exists. Sender verification has not been configured for your domain.",
-                "regulations": [
-                    "AU Essential Eight ML1 — Email hardening (SPF required)",
-                    "NZ NCSC Guidelines — Email security baseline",
-                    "AU Privacy Act 1988 — APP 11.1 (security of personal information)",
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+                "No email security policy exists. Sender verification has not been configured for your domain.",
+                [
+                    "AU Essential Eight ML1 - Email hardening (SPF required)",
+                    "NZ NCSC Guidelines - Email security baseline",
+                    "AU Privacy Act 1988 - APP 11.1 (security of personal information)",
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
                 ],
-                "fix_type": "voice",
-                "score_impact": 8,
-                "status": "open"
-            }).execute()
+                "voice", 8
+            )
             findings_count += 1
 
-        # Update scan engine result
         supabase_admin.table("scan_engine_results").upsert({
             "tenant_id": tenant_id,
             "scan_id": scan_id,

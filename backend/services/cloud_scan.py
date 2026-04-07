@@ -5,6 +5,46 @@ import httpx
 from services.database import supabase_admin
 
 
+def upsert_finding(tenant_id, scan_id, engine, severity, title, description, governance_gap, regulations, fix_type, score_impact):
+    existing = supabase_admin.table("findings")\
+        .select("id")\
+        .eq("tenant_id", tenant_id)\
+        .eq("engine", engine)\
+        .eq("title", title)\
+        .execute()
+
+    if existing.data:
+        supabase_admin.table("findings")\
+            .update({
+                "scan_id": scan_id,
+                "severity": severity,
+                "description": description,
+                "governance_gap": governance_gap,
+                "regulations": regulations,
+                "fix_type": fix_type,
+                "score_impact": score_impact,
+                "status": "open"
+            })\
+            .eq("id", existing.data[0]["id"])\
+            .execute()
+        return False
+    else:
+        supabase_admin.table("findings").insert({
+            "tenant_id": tenant_id,
+            "scan_id": scan_id,
+            "engine": engine,
+            "severity": severity,
+            "title": title,
+            "description": description,
+            "governance_gap": governance_gap,
+            "regulations": regulations,
+            "fix_type": fix_type,
+            "score_impact": score_impact,
+            "status": "open"
+        }).execute()
+        return True
+
+
 def get_bucket_names(domain: str) -> list:
     company = domain.split(".")[0]
     return [
@@ -51,13 +91,10 @@ async def run_cloud_scan(tenant_id: str, scan_id: str, domain: str):
 
         if exposed_buckets:
             for bucket in exposed_buckets:
-                supabase_admin.table("findings").insert({
-                    "tenant_id": tenant_id,
-                    "scan_id": scan_id,
-                    "engine": "cloud",
-                    "severity": "critical",
-                    "title": "Your cloud files are visible to everyone on the internet",
-                    "description": (
+                upsert_finding(
+                    tenant_id, scan_id, "cloud", "critical",
+                    "Your cloud files are visible to everyone on the internet",
+                    (
                         f"A cloud storage area named '{bucket}' was found that is "
                         f"publicly accessible. This means anyone on the internet can "
                         f"view and download files stored there. This could include "
@@ -66,45 +103,38 @@ async def run_cloud_scan(tenant_id: str, scan_id: str, domain: str):
                         f"This is a serious privacy breach under both NZ and AU privacy law "
                         f"and must be reported to the relevant authority within 72 hours."
                     ),
-                    "governance_gap": "No data classification or cloud security policy exists. Staff are storing sensitive business data in publicly accessible locations without awareness of the risk.",
-                    "regulations": [
-                        "NZ Privacy Act 2020 — IPP 5 (security safeguards for personal information)",
-                        "NZ Privacy Act 2020 — s113 (notifiable privacy breach — notify within 72 hours)",
-                        "NZ Privacy Amendment Act 2025 — IPP 3A (indirect data collection obligations)",
-                        "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-                        "AU Privacy Act 1988 — APP 11.2 (destruction or de-identification when no longer needed)",
-                        "AU Privacy Act 1988 — APP 8 (cross-border disclosure of personal information)",
-                        "AU Privacy Act 1988 — NDB Scheme s26WK (notifiable data breach — notify within 30 days)",
-                        "AU Privacy Act 1988 (amended Dec 2024) — APP 11.1 (technical and organisational measures required)",
-                        "AU Cyber Security Act 2024 — s30 (cyber incident reporting obligations)"
+                    "No data classification or cloud security policy exists. Staff are storing sensitive business data in publicly accessible locations without awareness of the risk.",
+                    [
+                        "NZ Privacy Act 2020 - IPP 5 (security safeguards for personal information)",
+                        "NZ Privacy Act 2020 - s113 (notifiable privacy breach - notify within 72 hours)",
+                        "NZ Privacy Amendment Act 2025 - IPP 3A (indirect data collection obligations)",
+                        "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+                        "AU Privacy Act 1988 - APP 11.2 (destruction or de-identification when no longer needed)",
+                        "AU Privacy Act 1988 - APP 8 (cross-border disclosure of personal information)",
+                        "AU Privacy Act 1988 - NDB Scheme s26WK (notifiable data breach - notify within 30 days)",
+                        "AU Privacy Act 1988 (amended Dec 2024) - APP 11.1 (technical and organisational measures required)",
+                        "AU Cyber Security Act 2024 - s30 (cyber incident reporting obligations)"
                     ],
-                    "fix_type": "specialist",
-                    "score_impact": 25,
-                    "status": "open"
-                }).execute()
+                    "specialist", 25
+                )
                 findings_count += 1
 
         else:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "cloud",
-                "severity": "low",
-                "title": "No publicly exposed cloud storage found",
-                "description": (
+            upsert_finding(
+                tenant_id, scan_id, "cloud", "low",
+                "No publicly exposed cloud storage found",
+                (
                     f"No publicly accessible cloud storage was found for {domain}. "
                     f"This is good. Ensure that any cloud storage your business uses "
                     f"is set to private and that staff know not to make files public."
                 ),
-                "governance_gap": "Ensure a data classification policy exists so staff know how to handle sensitive files securely.",
-                "regulations": [
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)",
-                    "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)"
+                "Ensure a data classification policy exists so staff know how to handle sensitive files securely.",
+                [
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)",
+                    "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)"
                 ],
-                "fix_type": "auto",
-                "score_impact": 0,
-                "status": "open"
-            }).execute()
+                "auto", 0
+            )
             findings_count = 1
 
         supabase_admin.table("scan_engine_results").upsert({

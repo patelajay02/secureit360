@@ -8,6 +8,46 @@ from datetime import datetime, timezone
 from services.database import supabase_admin
 
 
+def upsert_finding(tenant_id, scan_id, engine, severity, title, description, governance_gap, regulations, fix_type, score_impact):
+    existing = supabase_admin.table("findings")\
+        .select("id")\
+        .eq("tenant_id", tenant_id)\
+        .eq("engine", engine)\
+        .eq("title", title)\
+        .execute()
+
+    if existing.data:
+        supabase_admin.table("findings")\
+            .update({
+                "scan_id": scan_id,
+                "severity": severity,
+                "description": description,
+                "governance_gap": governance_gap,
+                "regulations": regulations,
+                "fix_type": fix_type,
+                "score_impact": score_impact,
+                "status": "open"
+            })\
+            .eq("id", existing.data[0]["id"])\
+            .execute()
+        return False
+    else:
+        supabase_admin.table("findings").insert({
+            "tenant_id": tenant_id,
+            "scan_id": scan_id,
+            "engine": engine,
+            "severity": severity,
+            "title": title,
+            "description": description,
+            "governance_gap": governance_gap,
+            "regulations": regulations,
+            "fix_type": fix_type,
+            "score_impact": score_impact,
+            "status": "open"
+        }).execute()
+        return True
+
+
 def check_ssl_expiry(domain: str) -> dict:
     try:
         context = ssl.create_default_context()
@@ -52,84 +92,69 @@ async def run_website_scan(tenant_id: str, scan_id: str, domain: str):
         ssl_result = check_ssl_expiry(domain)
 
         if not ssl_result["valid"]:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "website",
-                "severity": "critical",
-                "title": "Your website security certificate is invalid or missing",
-                "description": (
+            upsert_finding(
+                tenant_id, scan_id, "website", "critical",
+                "Your website security certificate is invalid or missing",
+                (
                     f"Your website {domain} has an invalid SSL certificate. "
                     f"This means visitors see a security warning when they visit your site. "
                     f"Data sent between your website and your clients is not protected. "
                     f"Google also ranks sites without valid certificates lower in search results."
                 ),
-                "governance_gap": "No asset lifecycle management process exists. SSL certificates are not being tracked or renewed before expiry.",
-                "regulations": [
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)",
-                    "NZ Privacy Amendment Act 2025 — IPP 3A (data protection obligations)",
-                    "AU Privacy Act 1988 — APP 11.1 (security of personal information)",
-                    "AU Privacy Act 1988 — APP 11.2 (destruction of personal information)",
-                    "AU Essential Eight ML1 — Patch applications"
+                "No asset lifecycle management process exists. SSL certificates are not being tracked or renewed before expiry.",
+                [
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)",
+                    "NZ Privacy Amendment Act 2025 - IPP 3A (data protection obligations)",
+                    "AU Privacy Act 1988 - APP 11.1 (security of personal information)",
+                    "AU Privacy Act 1988 - APP 11.2 (destruction of personal information)",
+                    "AU Essential Eight ML1 - Patch applications"
                 ],
-                "fix_type": "voice",
-                "score_impact": 15,
-                "status": "open"
-            }).execute()
+                "voice", 15
+            )
             findings_count += 1
 
         elif ssl_result["days_remaining"] < 30:
             severity = "critical" if ssl_result["days_remaining"] < 7 else "moderate"
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "website",
-                "severity": severity,
-                "title": f"Your website security certificate expires in {ssl_result['days_remaining']} days",
-                "description": (
+            upsert_finding(
+                tenant_id, scan_id, "website", severity,
+                f"Your website security certificate expires in {ssl_result['days_remaining']} days",
+                (
                     f"Your website {domain} security certificate expires in "
                     f"{ssl_result['days_remaining']} days. When it expires, visitors "
                     f"will see a warning saying your site is not secure. "
                     f"This will stop clients from trusting your website."
                 ),
-                "governance_gap": "No asset lifecycle management process exists. SSL certificates are not being tracked or renewed before expiry.",
-                "regulations": [
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)",
-                    "NZ Privacy Amendment Act 2025 — IPP 3A (data protection obligations)",
-                    "AU Privacy Act 1988 — APP 11.1 (security of personal information)",
-                    "AU Essential Eight ML1 — Patch applications"
+                "No asset lifecycle management process exists. SSL certificates are not being tracked or renewed before expiry.",
+                [
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)",
+                    "NZ Privacy Amendment Act 2025 - IPP 3A (data protection obligations)",
+                    "AU Privacy Act 1988 - APP 11.1 (security of personal information)",
+                    "AU Essential Eight ML1 - Patch applications"
                 ],
-                "fix_type": "voice",
-                "score_impact": 10,
-                "status": "open"
-            }).execute()
+                "voice", 10
+            )
             findings_count += 1
 
         headers_result = await check_security_headers(domain)
         if len(headers_result["missing_headers"]) > 2:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "website",
-                "severity": "low",
-                "title": "Your website is missing basic security protections",
-                "description": (
+            upsert_finding(
+                tenant_id, scan_id, "website", "low",
+                "Your website is missing basic security protections",
+                (
                     f"Your website {domain} is missing {len(headers_result['missing_headers'])} "
                     f"security settings that protect your visitors. These settings tell "
                     f"web browsers how to handle your website safely. Without them, "
                     f"your website is more vulnerable to certain types of attacks."
                 ),
-                "governance_gap": "No web security policy exists. Website security configuration is not being managed or reviewed.",
-                "regulations": [
-                    "AU Essential Eight ML1 — Patch applications (web hardening)",
-                    "NZ NCSC Guidelines — Web security baseline",
-                    "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect data)",
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+                "No web security policy exists. Website security configuration is not being managed or reviewed.",
+                [
+                    "AU Essential Eight ML1 - Patch applications (web hardening)",
+                    "NZ NCSC Guidelines - Web security baseline",
+                    "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect data)",
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
                 ],
-                "fix_type": "voice",
-                "score_impact": 5,
-                "status": "open"
-            }).execute()
+                "voice", 5
+            )
             findings_count += 1
 
         supabase_admin.table("scan_engine_results").upsert({

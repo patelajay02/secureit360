@@ -5,6 +5,46 @@ import httpx
 from services.database import supabase_admin
 
 
+def upsert_finding(tenant_id, scan_id, engine, severity, title, description, governance_gap, regulations, fix_type, score_impact):
+    existing = supabase_admin.table("findings")\
+        .select("id")\
+        .eq("tenant_id", tenant_id)\
+        .eq("engine", engine)\
+        .eq("title", title)\
+        .execute()
+
+    if existing.data:
+        supabase_admin.table("findings")\
+            .update({
+                "scan_id": scan_id,
+                "severity": severity,
+                "description": description,
+                "governance_gap": governance_gap,
+                "regulations": regulations,
+                "fix_type": fix_type,
+                "score_impact": score_impact,
+                "status": "open"
+            })\
+            .eq("id", existing.data[0]["id"])\
+            .execute()
+        return False
+    else:
+        supabase_admin.table("findings").insert({
+            "tenant_id": tenant_id,
+            "scan_id": scan_id,
+            "engine": engine,
+            "severity": severity,
+            "title": title,
+            "description": description,
+            "governance_gap": governance_gap,
+            "regulations": regulations,
+            "fix_type": fix_type,
+            "score_impact": score_impact,
+            "status": "open"
+        }).execute()
+        return True
+
+
 async def check_common_vulnerabilities(domain: str) -> list:
     vulnerabilities = []
 
@@ -15,7 +55,6 @@ async def check_common_vulnerabilities(domain: str) -> list:
             server = headers.get("server", "").lower()
             x_powered_by = headers.get("x-powered-by", "").lower()
 
-            # Check for outdated PHP versions
             if "php/" in x_powered_by:
                 php_version = x_powered_by.split("php/")[-1].strip()
                 major_version = int(php_version.split(".")[0]) if php_version else 0
@@ -32,16 +71,15 @@ async def check_common_vulnerabilities(domain: str) -> list:
                         "score_impact": 12,
                         "governance_gap": "No patch management policy or process exists. Website software is not being updated on a regular schedule.",
                         "regulations": [
-                            "AU Essential Eight ML1 — Patch applications (critical patches within 48 hours)",
-                            "AU Essential Eight ML1 — Patch operating systems",
-                            "NZ NCSC Guidelines — Patch management baseline",
-                            "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-                            "AU Privacy Act 1988 (amended Dec 2024) — APP 11.1 (technical measures required)",
-                            "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+                            "AU Essential Eight ML1 - Patch applications (critical patches within 48 hours)",
+                            "AU Essential Eight ML1 - Patch operating systems",
+                            "NZ NCSC Guidelines - Patch management baseline",
+                            "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+                            "AU Privacy Act 1988 (amended Dec 2024) - APP 11.1 (technical measures required)",
+                            "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
                         ]
                     })
 
-            # Check for outdated Apache
             if "apache/" in server:
                 apache_version = server.split("apache/")[-1].split(" ")[0]
                 vulnerabilities.append({
@@ -56,10 +94,10 @@ async def check_common_vulnerabilities(domain: str) -> list:
                     "score_impact": 5,
                     "governance_gap": "No patch management process exists. Server configuration is not following security best practices.",
                     "regulations": [
-                        "AU Essential Eight ML1 — Patch applications",
-                        "NZ NCSC Guidelines — Patch management baseline",
-                        "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-                        "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+                        "AU Essential Eight ML1 - Patch applications",
+                        "NZ NCSC Guidelines - Patch management baseline",
+                        "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+                        "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
                     ]
                 })
 
@@ -75,45 +113,37 @@ async def run_device_scan(tenant_id: str, scan_id: str, domain: str):
         vulnerabilities = await check_common_vulnerabilities(domain)
 
         for vuln in vulnerabilities:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "devices",
-                "severity": vuln["severity"],
-                "title": vuln["title"],
-                "description": vuln["description"],
-                "governance_gap": vuln["governance_gap"],
-                "regulations": vuln["regulations"],
-                "fix_type": "specialist" if vuln["severity"] == "critical" else "voice",
-                "score_impact": vuln["score_impact"],
-                "status": "open"
-            }).execute()
+            upsert_finding(
+                tenant_id, scan_id, "devices",
+                vuln["severity"],
+                vuln["title"],
+                vuln["description"],
+                vuln["governance_gap"],
+                vuln["regulations"],
+                "specialist" if vuln["severity"] == "critical" else "voice",
+                vuln["score_impact"]
+            )
             findings_count += 1
 
         if findings_count == 0:
-            supabase_admin.table("findings").insert({
-                "tenant_id": tenant_id,
-                "scan_id": scan_id,
-                "engine": "devices",
-                "severity": "low",
-                "title": "No obvious software vulnerabilities detected on your website",
-                "description": (
-                    f"Your website {domain} does not appear to be running any "
+            upsert_finding(
+                tenant_id, scan_id, "devices", "low",
+                "No obvious software vulnerabilities detected on your website",
+                (
+                    f"Your website does not appear to be running any "
                     f"obviously outdated software. However we recommend ensuring "
                     f"all computers and devices in your office are set to update "
                     f"automatically to stay protected."
                 ),
-                "governance_gap": "Ensure a patch management process exists to keep all devices and software updated regularly.",
-                "regulations": [
-                    "AU Essential Eight ML1 — Patch applications",
-                    "NZ NCSC Guidelines — Patch management baseline",
-                    "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-                    "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+                "Ensure a patch management process exists to keep all devices and software updated regularly.",
+                [
+                    "AU Essential Eight ML1 - Patch applications",
+                    "NZ NCSC Guidelines - Patch management baseline",
+                    "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+                    "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
                 ],
-                "fix_type": "auto",
-                "score_impact": 0,
-                "status": "open"
-            }).execute()
+                "auto", 0
+            )
             findings_count = 1
 
         supabase_admin.table("scan_engine_results").upsert({

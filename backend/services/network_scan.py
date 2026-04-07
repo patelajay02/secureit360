@@ -10,18 +10,18 @@ SHODAN_API_KEY = os.getenv("SHODAN_API_KEY")
 
 DANGEROUS_PORTS = {
     3389: {
-        "title": "Windows remote access is open to the internet — the number one ransomware entry point",
+        "title": "Windows remote access is open to the internet - the number one ransomware entry point",
         "description": "Your network has Windows Remote Desktop (RDP) accessible from the internet. This is the most common way ransomware gangs break into businesses. They scan the internet for exactly this and use automated tools to guess passwords. If they get in, they can lock every computer in your business within minutes.",
         "severity": "critical",
         "score_impact": 35,
         "governance_gap": "No network security policy or firewall management process exists. Nobody is responsible for monitoring open network access points.",
         "regulations": [
-            "AU Essential Eight ML2 — Restrict administrative privileges (RDP must be restricted)",
-            "AU Essential Eight ML1 — Patch operating systems (exposed RDP is unacceptable)",
-            "AU Cyber Security Act 2024 — s30 (ransomware incident reporting obligations)",
-            "NZ NCSC Guidelines — Network security baseline (close unnecessary remote access)",
-            "NZ Privacy Act 2020 — IPP 5 (security safeguards for personal information)",
-            "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)"
+            "AU Essential Eight ML2 - Restrict administrative privileges (RDP must be restricted)",
+            "AU Essential Eight ML1 - Patch operating systems (exposed RDP is unacceptable)",
+            "AU Cyber Security Act 2024 - s30 (ransomware incident reporting obligations)",
+            "NZ NCSC Guidelines - Network security baseline (close unnecessary remote access)",
+            "NZ Privacy Act 2020 - IPP 5 (security safeguards for personal information)",
+            "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)"
         ]
     },
     22: {
@@ -31,10 +31,10 @@ DANGEROUS_PORTS = {
         "score_impact": 15,
         "governance_gap": "No network security policy exists. There is no process for reviewing and closing unnecessary network access.",
         "regulations": [
-            "AU Essential Eight ML1 — Restrict administrative privileges",
-            "NZ NCSC Guidelines — Network security baseline",
-            "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-            "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+            "AU Essential Eight ML1 - Restrict administrative privileges",
+            "NZ NCSC Guidelines - Network security baseline",
+            "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+            "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
         ]
     },
     21: {
@@ -44,10 +44,10 @@ DANGEROUS_PORTS = {
         "score_impact": 10,
         "governance_gap": "No network security policy exists. Outdated and insecure services are not being identified or removed.",
         "regulations": [
-            "AU Essential Eight ML1 — Patch applications (insecure protocols must be removed)",
-            "NZ NCSC Guidelines — Network security baseline",
-            "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-            "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+            "AU Essential Eight ML1 - Patch applications (insecure protocols must be removed)",
+            "NZ NCSC Guidelines - Network security baseline",
+            "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+            "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
         ]
     },
     23: {
@@ -57,11 +57,11 @@ DANGEROUS_PORTS = {
         "score_impact": 20,
         "governance_gap": "No network security policy exists. Outdated and insecure services are not being removed from the network.",
         "regulations": [
-            "AU Essential Eight ML1 — Patch applications (insecure protocols must be disabled)",
-            "AU Essential Eight ML1 — Restrict administrative privileges",
-            "NZ NCSC Guidelines — Network security baseline",
-            "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-            "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+            "AU Essential Eight ML1 - Patch applications (insecure protocols must be disabled)",
+            "AU Essential Eight ML1 - Restrict administrative privileges",
+            "NZ NCSC Guidelines - Network security baseline",
+            "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+            "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
         ]
     },
     445: {
@@ -71,15 +71,55 @@ DANGEROUS_PORTS = {
         "score_impact": 30,
         "governance_gap": "No network security policy or firewall management process exists. Critical network services are not being protected from external access.",
         "regulations": [
-            "AU Essential Eight ML1 — Patch operating systems (SMB must be blocked externally)",
-            "AU Essential Eight ML2 — Restrict administrative privileges",
-            "AU Cyber Security Act 2024 — s30 (ransomware incident reporting obligations)",
-            "NZ NCSC Guidelines — Network security baseline",
-            "AU Privacy Act 1988 — APP 11.1 (reasonable steps to protect personal information)",
-            "NZ Privacy Act 2020 — IPP 5 (security safeguards)"
+            "AU Essential Eight ML1 - Patch operating systems (SMB must be blocked externally)",
+            "AU Essential Eight ML2 - Restrict administrative privileges",
+            "AU Cyber Security Act 2024 - s30 (ransomware incident reporting obligations)",
+            "NZ NCSC Guidelines - Network security baseline",
+            "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)",
+            "NZ Privacy Act 2020 - IPP 5 (security safeguards)"
         ]
     }
 }
+
+
+def upsert_finding(tenant_id, scan_id, engine, severity, title, description, governance_gap, regulations, fix_type, score_impact):
+    existing = supabase_admin.table("findings")\
+        .select("id")\
+        .eq("tenant_id", tenant_id)\
+        .eq("engine", engine)\
+        .eq("title", title)\
+        .execute()
+
+    if existing.data:
+        supabase_admin.table("findings")\
+            .update({
+                "scan_id": scan_id,
+                "severity": severity,
+                "description": description,
+                "governance_gap": governance_gap,
+                "regulations": regulations,
+                "fix_type": fix_type,
+                "score_impact": score_impact,
+                "status": "open"
+            })\
+            .eq("id", existing.data[0]["id"])\
+            .execute()
+        return False
+    else:
+        supabase_admin.table("findings").insert({
+            "tenant_id": tenant_id,
+            "scan_id": scan_id,
+            "engine": engine,
+            "severity": severity,
+            "title": title,
+            "description": description,
+            "governance_gap": governance_gap,
+            "regulations": regulations,
+            "fix_type": fix_type,
+            "score_impact": score_impact,
+            "status": "open"
+        }).execute()
+        return True
 
 
 async def run_network_scan(tenant_id: str, scan_id: str, domain: str):
@@ -99,21 +139,16 @@ async def run_network_scan(tenant_id: str, scan_id: str, domain: str):
             for port in open_ports:
                 if port in DANGEROUS_PORTS:
                     port_info = DANGEROUS_PORTS[port]
-
-                    supabase_admin.table("findings").insert({
-                        "tenant_id": tenant_id,
-                        "scan_id": scan_id,
-                        "engine": "network",
-                        "severity": port_info["severity"],
-                        "title": port_info["title"],
-                        "description": port_info["description"],
-                        "governance_gap": port_info["governance_gap"],
-                        "regulations": port_info["regulations"],
-                        "fix_type": "specialist" if port_info["severity"] == "critical" else "voice",
-                        "score_impact": port_info["score_impact"],
-                        "status": "open"
-                    }).execute()
-
+                    upsert_finding(
+                        tenant_id, scan_id, "network",
+                        port_info["severity"],
+                        port_info["title"],
+                        port_info["description"],
+                        port_info["governance_gap"],
+                        port_info["regulations"],
+                        "specialist" if port_info["severity"] == "critical" else "voice",
+                        port_info["score_impact"]
+                    )
                     findings_count += 1
 
         except shodan.APIError:
