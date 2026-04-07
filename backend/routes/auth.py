@@ -140,6 +140,8 @@ def login(data: LoginRequest):
         })
 
         user_id = auth_response.user.id
+        if not auth_response.session:
+            raise HTTPException(status_code=401, detail="Invalid login credentials")
         token = auth_response.session.access_token
 
         tenant_user = supabase_admin.table("tenant_users")\
