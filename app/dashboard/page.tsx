@@ -188,6 +188,7 @@ export default function DashboardPage() {
           <a href="/dashboard" className="text-gray-400 hover:text-white text-sm">Dashboard</a>
           <a href="/dashboard/scanning" className="text-gray-400 hover:text-white text-sm">Run Scan</a>
           <a href="/settings" className="text-gray-400 hover:text-white text-sm">Settings</a>
+          <a href="/pricing" className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded-lg font-medium">Upgrade</a>
           <span className="text-gray-400 text-sm">{companyName}</span>
           <button onClick={handleLogout} className="text-gray-400 hover:text-white text-sm">Sign out</button>
         </div>
@@ -414,3 +415,4 @@ export default function DashboardPage() {
     </main>
   )
 }
+
