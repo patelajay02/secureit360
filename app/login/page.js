@@ -1,11 +1,11 @@
 // app/login/page.js
-// SecureIT360 — Login page
+// SecureIT360 - Login page
 
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { setToken, setUser, publicFetch } from "../../lib/auth";
+import { setToken, setRefreshToken, setUser, publicFetch } from "../../lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,8 +43,19 @@ export default function LoginPage() {
         return;
       }
 
-      setToken(data.access_token);
-      setUser(data.user);
+      setToken(data.token);
+      if (data.refresh_token) setRefreshToken(data.refresh_token);
+      setUser({
+        user_id: data.user_id,
+        email: data.email,
+        tenant_id: data.tenant_id,
+        role: data.role,
+        company_name: data.company_name,
+        plan: data.plan,
+        country: data.country,
+        mobile: data.mobile,
+      });
+
       router.push("/dashboard");
 
     } catch (err) {
