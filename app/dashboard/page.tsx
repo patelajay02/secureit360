@@ -1,7 +1,152 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+
+const VOICE_GUIDE_STEPS: Record<string, string[]> = {
+  "Scammers can send emails pretending to be your business": [
+    "Log in to wherever you manage your domain name. This is usually GoDaddy, Cloudflare, Crazy Domains, or your web hosting provider.",
+    "Find the DNS settings for your domain.",
+    "Add a new TXT record. Set the Name to underscore dmarc, and set the Value to: v equals DMARC1 semicolon p equals none semicolon rua equals mailto your email address.",
+    "Save the record and wait up to 30 minutes for it to take effect.",
+    "Run your scan again to confirm this issue is resolved."
+  ],
+  "Your email domain has no sender protection": [
+    "Log in to wherever you manage your domain name.",
+    "Find the DNS settings for your domain.",
+    "Add a new TXT record. Set the Name to @ and set the Value to: v equals spf1 include colon _spf.google.com tilde all. Replace the Google part with your email provider if you do not use Google.",
+    "Save the record and wait up to 30 minutes for it to take effect.",
+    "Run your scan again to confirm this issue is resolved."
+  ],
+  "Your website security certificate is invalid or missing": [
+    "Contact your website hosting provider and ask them to install or renew your SSL certificate.",
+    "If you use Cloudflare, enable the SSL setting in your dashboard under the SSL slash TLS section.",
+    "If you manage your own server, use Let's Encrypt to get a free SSL certificate.",
+    "Once installed, visit your website and confirm the padlock icon appears in the browser address bar.",
+    "Run your scan again to confirm this issue is resolved."
+  ],
+  "Your website is missing basic security protections": [
+    "Contact your web developer or hosting provider.",
+    "Ask them to add the following security headers to your website: X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, and Content-Security-Policy.",
+    "If you use WordPress, install a security plugin such as Wordfence or iThemes Security which adds these automatically.",
+    "Run your scan again to confirm this issue is resolved."
+  ],
+  "Windows remote access is open to the internet - the number one ransomware entry point": [
+    "Contact your IT support person immediately. This is a critical issue.",
+    "Ask them to close port 3389 on your firewall or router.",
+    "If remote access is needed, ask your IT person to set up a VPN instead.",
+    "Do not delay this fix. This is the most common way ransomware enters businesses.",
+    "Run your scan again to confirm this issue is resolved."
+  ],
+  "Windows file sharing is exposed to the internet": [
+    "Contact your IT support person immediately. This is a critical issue.",
+    "Ask them to block port 445 on your firewall or router.",
+    "Ensure Windows file sharing is not exposed to the public internet.",
+    "Run your scan again to confirm this issue is resolved."
+  ],
+  "No publicly exposed cloud storage found": [
+    "This is good news. No action is required.",
+    "Continue to ensure any cloud storage your business uses is set to private.",
+    "Remind staff never to make business files publicly accessible."
+  ],
+  "No obvious software vulnerabilities detected on your website": [
+    "This is good news. No action is required.",
+    "Continue to keep all software, plugins, and themes updated regularly.",
+    "Set up automatic updates where possible."
+  ]
+}
+
+function getVoiceSteps(title: string): string[] {
+  for (const key of Object.keys(VOICE_GUIDE_STEPS)) {
+    if (title?.toLowerCase().includes(key.toLowerCase().substring(0, 30))) {
+      return VOICE_GUIDE_STEPS[key]
+    }
+  }
+  return [
+    "Review this finding carefully.",
+    "Contact your IT support person or email governance@secureit360.co for personalised help.",
+    "Ask them to address the specific issue identified in this finding.",
+    "Run your scan again after the fix is applied to confirm it is resolved."
+  ]
+}
+
+function VoiceGuideModal({ finding, onClose }: { finding: any, onClose: () => void }) {
+  const [speaking, setSpeaking] = useState(false)
+  const steps = getVoiceSteps(finding.title)
+
+  const fullScript = `${finding.title}. Here is how to fix this step by step. ${steps.map((s, i) => `Step ${i + 1}. ${s}`).join(' ')}`
+
+  function handlePlay() {
+    if (speaking) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(fullScript)
+    utterance.rate = 0.9
+    utterance.pitch = 1
+    utterance.onend = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
+    window.speechSynthesis.speak(utterance)
+    setSpeaking(true)
+  }
+
+  function handleClose() {
+    window.speechSynthesis.cancel()
+    setSpeaking(false)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-white font-semibold text-lg pr-4">{finding.title}</h3>
+          <button onClick={handleClose} className="text-gray-500 hover:text-white text-xl flex-shrink-0">&#x2715;</button>
+        </div>
+
+        <div className="bg-gray-800 rounded-xl p-4 mb-6 text-center">
+          <p className="text-gray-400 text-sm mb-3">Click play to hear how to fix this issue</p>
+          <button
+            onClick={handlePlay}
+            className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-colors ${speaking ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'}`}
+          >
+            {speaking ? (
+              <>
+                <span className="w-3 h-3 bg-white rounded-sm inline-block"></span>
+                Stop
+              </>
+            ) : (
+              <>
+                <span className="w-0 h-0 border-t-8 border-b-8 border-l-12 border-transparent border-l-white inline-block" style={{borderLeftWidth: '14px'}}></span>
+                Play voice guide
+              </>
+            )}
+          </button>
+          {speaking && (
+            <p className="text-green-400 text-xs mt-2 animate-pulse">Speaking...</p>
+          )}
+        </div>
+
+        <div>
+          <h4 className="text-gray-300 font-medium mb-3 text-sm uppercase tracking-wide">Step-by-step instructions</h4>
+          <ol className="space-y-3">
+            {steps.map((step, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="bg-red-900/50 text-red-300 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                <p className="text-gray-300 text-sm leading-relaxed">{step}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-gray-800">
+          <p className="text-gray-500 text-xs">Need more help? Email <a href="mailto:governance@secureit360.co" className="text-gray-400 underline">governance@secureit360.co</a> and a specialist will walk you through this personally.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -12,6 +157,7 @@ export default function DashboardPage() {
   const [plan, setPlan] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
+  const [voiceFinding, setVoiceFinding] = useState<any>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -81,7 +227,7 @@ export default function DashboardPage() {
     return 'text-green-400'
   }
 
-  const getFixButton = (fixType: string) => {
+  const getFixButton = (fixType: string, finding: any) => {
     switch(fixType) {
       case 'auto':
         return (
@@ -91,7 +237,10 @@ export default function DashboardPage() {
         )
       case 'voice':
         return (
-          <button className="text-xs px-2 py-1 rounded font-medium bg-amber-900/50 text-amber-300 hover:bg-amber-900">
+          <button
+            onClick={() => setVoiceFinding(finding)}
+            className="text-xs px-2 py-1 rounded font-medium bg-amber-900/50 text-amber-300 hover:bg-amber-900"
+          >
             Voice guide
           </button>
         )
@@ -204,6 +353,10 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-gray-950 text-white">
 
+      {voiceFinding && (
+        <VoiceGuideModal finding={voiceFinding} onClose={() => setVoiceFinding(null)} />
+      )}
+
       <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">
           SecureIT<span className="text-red-500">360</span>
@@ -225,7 +378,6 @@ export default function DashboardPage() {
           <p className="text-gray-400 mt-1">Here is your current cyber security status at a glance.</p>
         </div>
 
-        {/* Trial banner - always show for trial users */}
         {isTrial && (
           <div className="bg-gray-900 border border-red-800 rounded-2xl p-6 mb-8 text-center">
             <p className="text-red-400 font-semibold text-lg mb-1">
@@ -250,7 +402,6 @@ export default function DashboardPage() {
 
         {dashboard?.ransom_score && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
               <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">Ransom Risk Score</h3>
               <div className="relative inline-flex items-center justify-center mb-4">
@@ -307,28 +458,12 @@ export default function DashboardPage() {
                 <div className="border-b border-gray-800 pb-3">
                   <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide">Indicative regulatory exposure</p>
                   <p className="text-sm mb-1">{penaltyInfo?.fine_exposure}</p>
-                  {penaltyInfo?.fine_if_moderate && (
-                    <p className="text-sm mb-1 text-gray-400">{penaltyInfo.fine_if_moderate}</p>
-                  )}
-                  {penaltyInfo?.fine_if_low && (
-                    <p className="text-sm text-gray-400">{penaltyInfo.fine_if_low}</p>
-                  )}
+                  {penaltyInfo?.fine_if_moderate && <p className="text-sm mb-1 text-gray-400">{penaltyInfo.fine_if_moderate}</p>}
+                  {penaltyInfo?.fine_if_low && <p className="text-sm text-gray-400">{penaltyInfo.fine_if_low}</p>}
                 </div>
                 {penaltyInfo?.residual_risk && (
                   <div className="border-b border-gray-800 pb-3">
                     <p className="text-gray-500 text-xs">{penaltyInfo.residual_risk}</p>
-                    {penaltyInfo?.residual_steps && (
-                      <ul className="mt-2 space-y-1">
-                        {penaltyInfo.residual_steps.map((step: string, i: number) => (
-                          <li key={i} className="text-gray-600 text-xs">- {step}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-                {penaltyInfo?.new_risk && (
-                  <div className="border-b border-gray-800 pb-3">
-                    <p className="text-amber-500 text-xs italic">{penaltyInfo.new_risk}</p>
                   </div>
                 )}
                 {penaltyInfo?.ransom_reporting && (
@@ -338,7 +473,6 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-
           </div>
         )}
 
@@ -371,16 +505,12 @@ export default function DashboardPage() {
                   <p className="text-gray-300 text-xs font-medium mb-1">{reg.name}</p>
                   <p className="text-gray-500 text-xs mb-2">{reg.detail}</p>
                   <p className={`text-2xl font-bold ${getComplianceColor(reg.score)}`}>{reg.score}%</p>
-                  <p className={`text-xs mt-1 ${getComplianceTextColor(reg.score)}`}>
-                    {getComplianceStatus(reg.score)}
-                  </p>
+                  <p className={`text-xs mt-1 ${getComplianceTextColor(reg.score)}`}>{getComplianceStatus(reg.score)}</p>
                 </div>
               ))}
             </div>
             {penaltyInfo?.key_law && (
-              <p className="text-gray-600 text-xs mt-4 italic">
-                Current legislation: {penaltyInfo.key_law}
-              </p>
+              <p className="text-gray-600 text-xs mt-4 italic">Current legislation: {penaltyInfo.key_law}</p>
             )}
           </div>
         )}
@@ -423,7 +553,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                       <div className="mt-2">
-                        {getFixButton(finding.fix_type)}
+                        {getFixButton(finding.fix_type, finding)}
                       </div>
                     </div>
                   </div>
