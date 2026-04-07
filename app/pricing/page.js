@@ -7,7 +7,7 @@ import { authFetch, getToken } from "../../lib/auth";
 const PRICING = {
   NZ:  { currency: "NZD", symbol: "$", starter: 250,    pro: 500,    enterprise: 840    },
   AU:  { currency: "AUD", symbol: "$", starter: 299,    pro: 599,    enterprise: 999    },
-  IN:  { currency: "INR", symbol: "₹", starter: 12500,  pro: 25000,  enterprise: 42000  },
+  IN:  { currency: "INR", symbol: "Rs", starter: 12500, pro: 25000,  enterprise: 42000  },
   UAE: { currency: "AED", symbol: "AED ", starter: 549, pro: 1099,   enterprise: 1849   },
   OTHER: { currency: "USD", symbol: "$", starter: 149,  pro: 299,    enterprise: 499    },
 };
@@ -66,17 +66,28 @@ export default function PricingPage() {
   const [error, setError] = useState("");
   const [pricing, setPricing] = useState(PRICING.NZ);
   const [country, setCountry] = useState("NZ");
-  const [userStatus, setUserStatus] = useState("trial");
+  const [userStatus, setUserStatus] = useState(null);
 
   useEffect(() => {
     const token = getToken();
     if (!token) { router.push("/"); return; }
     const c = localStorage.getItem("country") || "NZ";
-    const s = localStorage.getItem("status") || "trial";
     setCountry(c);
-    setUserStatus(s);
     setPricing(PRICING[c] || PRICING.OTHER);
+    fetchSubscriptionStatus();
   }, []);
+
+  const fetchSubscriptionStatus = async () => {
+    try {
+      const res = await authFetch("/billing/subscription");
+      const data = await res.json();
+      const status = data.status?.toLowerCase() || "trial";
+      setUserStatus(status);
+    } catch (e) {
+      const fallback = localStorage.getItem("status") || "trial";
+      setUserStatus(fallback);
+    }
+  };
 
   const handleSubscribe = async (planKey) => {
     setLoading(planKey);
@@ -102,6 +113,7 @@ export default function PricingPage() {
 
   const getButtonLabel = (planKey) => {
     if (loading === planKey) return "Redirecting...";
+    if (userStatus === null) return "Loading...";
     if (userStatus === "trial") return "Start 7-day free trial";
     if (userStatus === "past_due") return "Reactivate — Subscribe Now";
     if (userStatus === "cancelled") return "Resubscribe Now";
@@ -114,6 +126,8 @@ export default function PricingPage() {
     { key: "enterprise", name: "Enterprise", price: pricing.enterprise, description: "Complete cyber security for larger businesses with multiple domains", features: FEATURES.enterprise },
   ];
 
+  const isActiveSub = userStatus === "active";
+
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center">
@@ -124,6 +138,7 @@ export default function PricingPage() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">Choose your plan</h2>
+
           {userStatus === "past_due" && (
             <div className="bg-amber-900/30 border border-amber-700 text-amber-300 rounded-lg p-4 mb-6 max-w-lg mx-auto">
               Your last payment failed. Please resubscribe to restore full access.
@@ -132,6 +147,11 @@ export default function PricingPage() {
           {userStatus === "cancelled" && (
             <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg p-4 mb-6 max-w-lg mx-auto">
               Your subscription has been cancelled. Resubscribe below to restore access.
+            </div>
+          )}
+          {isActiveSub && (
+            <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg p-4 mb-6 max-w-lg mx-auto">
+              You already have an active subscription. To change your plan, please contact governance@secureit360.co
             </div>
           )}
           {userStatus === "trial" && (
@@ -169,9 +189,15 @@ export default function PricingPage() {
                 ))}
               </ul>
               <button
-                onClick={() => handleSubscribe(plan.key)}
-                disabled={loading === plan.key}
-                className={`w-full py-3 rounded-lg font-semibold text-sm transition ${plan.popular ? "bg-red-600 hover:bg-red-700 text-white" : "bg-gray-800 hover:bg-gray-700 text-white"} disabled:opacity-50`}
+                onClick={() => !isActiveSub && handleSubscribe(plan.key)}
+                disabled={loading === plan.key || isActiveSub || userStatus === null}
+                className={`w-full py-3 rounded-lg font-semibold text-sm transition ${
+                  isActiveSub
+                    ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                    : plan.popular
+                    ? "bg-red-600 hover:bg-red-700 text-white"
+                    : "bg-gray-800 hover:bg-gray-700 text-white"
+                } disabled:opacity-50`}
               >
                 {getButtonLabel(plan.key)}
               </button>
