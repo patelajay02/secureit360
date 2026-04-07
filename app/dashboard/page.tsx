@@ -9,6 +9,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [companyName, setCompanyName] = useState('')
   const [country, setCountry] = useState('NZ')
+  const [plan, setPlan] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -19,6 +22,9 @@ export default function DashboardPage() {
     }
     setCompanyName(company || '')
     setCountry(localStorage.getItem('country') || 'NZ')
+    setPlan(localStorage.getItem('plan'))
+    setStatus(localStorage.getItem('status'))
+    setTrialEndsAt(localStorage.getItem('trial_ends_at'))
     fetchDashboard(token)
   }, [])
 
@@ -39,6 +45,16 @@ export default function DashboardPage() {
   const handleLogout = () => {
     localStorage.clear()
     router.push('/')
+  }
+
+  const isTrial = status === 'trial'
+
+  const getTrialDaysLeft = () => {
+    if (!trialEndsAt) return 0
+    const end = new Date(trialEndsAt)
+    const now = new Date()
+    const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return Math.max(0, diff)
   }
 
   const getScoreColor = (score: number) => {
@@ -163,6 +179,13 @@ export default function DashboardPage() {
     return regulations
   }
 
+  const isCarriedOver = (finding: any) => {
+    if (!finding.updated_at || !finding.created_at) return false
+    const created = new Date(finding.created_at).getTime()
+    const updated = new Date(finding.updated_at).getTime()
+    return updated > created
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -176,6 +199,7 @@ export default function DashboardPage() {
   const scoreColor = getScoreColor(ransomScore)
   const penaltyInfo = dashboard?.penalty_info
   const regulations = getRegulations(dashboard?.compliance, country)
+  const trialDaysLeft = getTrialDaysLeft()
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
@@ -200,6 +224,19 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-bold text-white">Your Security Dashboard</h2>
           <p className="text-gray-400 mt-1">Here is your current cyber security status at a glance.</p>
         </div>
+
+        {/* Trial banner - always show for trial users */}
+        {isTrial && (
+          <div className="bg-gray-900 border border-red-800 rounded-2xl p-6 mb-8 text-center">
+            <p className="text-red-400 font-semibold text-lg mb-1">
+              Free trial � {trialDaysLeft > 0 ? `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} remaining` : 'expires today'}
+            </p>
+            <p className="text-gray-400 text-sm mb-4">Your free trial includes Dark Web and Email Security scans only. Upgrade to unlock all 6 scan engines, full Ransom Risk Score, Governance Score, and regulatory compliance mapping.</p>
+            <a href="/pricing" className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3 rounded-lg">
+              Subscribe Now � from $250 NZD/month + GST
+            </a>
+          </div>
+        )}
 
         {!dashboard?.findings_summary && (
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 text-center mb-8">
@@ -364,7 +401,14 @@ export default function DashboardPage() {
                        finding.severity === 'moderate' ? 'Moderate' : 'Low'}
                     </span>
                     <div className="flex-1">
-                      <p className="text-white text-sm font-medium">{finding.title}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-white text-sm font-medium">{finding.title}</p>
+                        {isCarriedOver(finding) && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 border border-amber-800">
+                            Not fixed since last scan
+                          </span>
+                        )}
+                      </div>
                       <p className="text-gray-500 text-xs mt-1">{finding.description?.substring(0, 120)}...</p>
                       {finding.governance_gap && (
                         <p className="text-gray-600 text-xs italic mt-2">{finding.governance_gap}</p>
@@ -407,19 +451,11 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {dashboard?.ransom_score && (
-          <div className="bg-gray-900 border border-red-800 rounded-2xl p-6 mt-6 text-center">
-            <p className="text-red-400 font-semibold text-lg mb-2">You are on a free trial</p>
-            <p className="text-gray-400 text-sm mb-4">Your free trial includes Dark Web and Email Security scans only. Upgrade to unlock all 6 scan engines, full Ransom Risk Score, Governance Score, and regulatory compliance mapping.</p>
-            <a href="/pricing" className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3 rounded-lg">Subscribe Now - from $250 NZD/month + GST</a>
-          </div>
-        )}
         <p className="text-center text-gray-700 text-xs mt-8">
-          Ã‚Â© 2026 Global Cyber Assurance. All rights reserved.
+          &copy; 2026 Global Cyber Assurance. All rights reserved.
         </p>
 
       </div>
     </main>
   )
 }
-

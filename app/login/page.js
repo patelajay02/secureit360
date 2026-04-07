@@ -56,6 +56,13 @@ export default function LoginPage() {
         mobile: data.mobile,
       });
 
+      // Save extra fields needed by dashboard
+      localStorage.setItem("company_name", data.company_name || "");
+      localStorage.setItem("country", data.country || "NZ");
+      localStorage.setItem("plan", data.plan || "");
+      localStorage.setItem("status", data.status || "trial");
+      localStorage.setItem("trial_ends_at", data.trial_ends_at || "");
+
       router.push("/dashboard");
 
     } catch (err) {
