@@ -3,7 +3,7 @@
 # Verifies JWT and extracts tenant info
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from services.database import supabase, supabase_admin
+from services.database import supabase_admin
 
 security = HTTPBearer()
 
@@ -12,7 +12,7 @@ async def get_current_tenant(
 ):
     token = credentials.credentials
     try:
-        user = supabase.auth.get_user(token)
+        user = supabase_admin.auth.get_user(token)
         if not user or not user.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -41,6 +41,7 @@ async def get_current_tenant(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[AUTH MIDDLEWARE ERROR] {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
