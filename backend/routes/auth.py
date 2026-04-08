@@ -391,12 +391,14 @@ def admin_delete_user(user_id: str):
         supabase_admin.table("domains").delete().eq("tenant_id", tenant_id).execute()
         supabase_admin.table("tenant_users").delete().eq("tenant_id", tenant_id).execute()
         supabase_admin.table("tenants").delete().eq("id", tenant_id).execute()
-        supabase_admin.auth.admin.delete_user(user_id)
+        try:
+            supabase_admin.auth.admin.delete_user(user_id)
+        except Exception as auth_error:
+            print(f"[ADMIN DELETE AUTH ERROR] {str(auth_error)}")
         return {"message": "User deleted successfully"}
     except Exception as e:
         print(f"[ADMIN DELETE ERROR] {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
-
 
 # --- ADMIN - SUSPEND / UNSUSPEND ----------------------------------------
 
