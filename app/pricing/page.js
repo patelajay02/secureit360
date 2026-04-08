@@ -81,11 +81,10 @@ export default function PricingPage() {
     try {
       const res = await authFetch("/billing/subscription");
       const data = await res.json();
-      const status = data.status?.toLowerCase() || "trial";
+      const status = (data.status || "trial").toLowerCase();
       setUserStatus(status);
     } catch (e) {
-      const fallback = localStorage.getItem("status") || "trial";
-      setUserStatus(fallback);
+      setUserStatus("trial");
     }
   };
 
@@ -95,14 +94,13 @@ export default function PricingPage() {
     try {
       const res = await authFetch(`/billing/checkout/${planKey}`, {
         method: "POST",
-        body: JSON.stringify({
-          plan: planKey,
-          success_url: "https://app.secureit360.co/dashboard?subscribed=true",
-          cancel_url: "https://app.secureit360.co/pricing",
-        }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.detail || "Could not start checkout. Please try again."); return; }
+      if (!res.ok) {
+        setError(data.detail || "Could not start checkout. Please try again.");
+        return;
+      }
       window.location.href = data.checkout_url || data.url;
     } catch (e) {
       setError("Something went wrong. Please try again.");
@@ -112,10 +110,10 @@ export default function PricingPage() {
   };
 
   const getButtonLabel = (planKey) => {
-    if (loading === planKey) return "Redirecting...";
+    if (loading === planKey) return "Redirecting to payment...";
     if (userStatus === null) return "Loading...";
-    if (userStatus === "trial") return "Start 7-day free trial";
-    if (userStatus === "past_due") return "Reactivate — Subscribe Now";
+    if (userStatus === "active") return "Current plan";
+    if (userStatus === "past_due") return "Reactivate — Pay Now";
     if (userStatus === "cancelled") return "Resubscribe Now";
     return "Subscribe Now";
   };
@@ -151,13 +149,13 @@ export default function PricingPage() {
           )}
           {isActiveSub && (
             <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg p-4 mb-6 max-w-lg mx-auto">
-              You already have an active subscription. To change your plan, please contact governance@secureit360.co
+              You have an active subscription. To change your plan, contact governance@secureit360.co
             </div>
           )}
-          {userStatus === "trial" && (
-            <p className="text-gray-400 text-lg">All plans include a 7-day free trial. Cancel anytime.</p>
+          {(userStatus === "trial" || userStatus === null) && (
+            <p className="text-gray-400 text-lg">Cancel anytime. No lock-in contracts.</p>
           )}
-          <p className="text-gray-500 text-sm mt-2">Prices shown in {pricing.currency} + GST</p>
+          <p className="text-gray-500 text-sm mt-2">Prices shown in {pricing.currency} + GST per month</p>
         </div>
 
         {error && (
