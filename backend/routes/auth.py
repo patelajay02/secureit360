@@ -381,6 +381,10 @@ def admin_delete_user(user_id: str):
         domains = supabase_admin.table("domains").select("id").eq("tenant_id", tenant_id).execute()
         domain_ids = [d["id"] for d in domains.data]
         if domain_ids:
+            scans = supabase_admin.table("scans").select("id").in_("domain_id", domain_ids).execute()
+            scan_ids = [s["id"] for s in scans.data]
+            if scan_ids:
+                supabase_admin.table("scan_engine_results").delete().in_("scan_id", scan_ids).execute()
             supabase_admin.table("scans").delete().in_("domain_id", domain_ids).execute()
         supabase_admin.table("domains").delete().eq("tenant_id", tenant_id).execute()
         supabase_admin.table("tenant_users").delete().eq("tenant_id", tenant_id).execute()
