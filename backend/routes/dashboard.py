@@ -294,6 +294,8 @@ def get_dashboard(authorization: str = Header(...)):
         plan = tenant_user.data["tenants"].get("plan")
         country = tenant_user.data["tenants"].get("country", "NZ")
         logo_url = tenant_user.data["tenants"].get("logo_url")
+        status = tenant_user.data["tenants"].get("status", "trial")
+        trial_ends_at = tenant_user.data["tenants"].get("trial_ends_at")
 
         findings = supabase_admin.table("findings")\
             .select("*")\
@@ -308,6 +310,8 @@ def get_dashboard(authorization: str = Header(...)):
                 "plan": plan,
                 "country": country,
                 "logo_url": logo_url,
+            "status": status,
+            "trial_ends_at": trial_ends_at,
                 "message": "No scans completed yet.",
                 "ransom_score": None,
                 "governance_score": None,
@@ -328,6 +332,8 @@ def get_dashboard(authorization: str = Header(...)):
             "plan": plan,
             "country": country,
             "logo_url": logo_url,
+            "status": status,
+            "trial_ends_at": trial_ends_at,
             "ransom_score": ransom_score,
             "governance_score": governance_score,
             "findings_summary": {
@@ -343,3 +349,5 @@ def get_dashboard(authorization: str = Header(...)):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
