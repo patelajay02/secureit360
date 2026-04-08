@@ -165,7 +165,6 @@ def login(data: LoginRequest):
         tenant = tenant_user.data["tenants"]
         tenant_status = tenant.get("status")
 
-        # Check if trial has expired
         if tenant_status == "trial":
             trial_ends_at = tenant.get("trial_ends_at")
             if trial_ends_at:
@@ -176,14 +175,18 @@ def login(data: LoginRequest):
                         detail="Your free trial has expired. Please subscribe to continue at app.secureit360.co/pricing"
                     )
 
-        # Check if subscription is cancelled
+        if tenant_status == "suspended":
+            raise HTTPException(
+                status_code=403,
+                detail="Your account has been suspended. Please contact governance@secureit360.co"
+            )
+
         if tenant_status == "cancelled":
             raise HTTPException(
                 status_code=403,
                 detail="Your subscription has been cancelled. Please resubscribe at app.secureit360.co/pricing"
             )
 
-        # Check if subscription is past due
         if tenant_status == "past_due":
             raise HTTPException(
                 status_code=403,
@@ -343,15 +346,21 @@ def admin_get_users():
         for tenant in tenants.data:
             for tu in tenant.get("tenant_users", []):
                 if tu["role"] == "owner":
-                    auth_user = supabase_admin.auth.admin.get_user_by_id(tu["user_id"])
-                    users.append({
-                        "user_id": tu["user_id"],
-                        "email": auth_user.user.email,
-                        "company_name": tenant["name"],
-                        "country": tenant.get("country", ""),
-                        "status": tenant.get("status", ""),
-                        "created_at": tenant.get("created_at", "")
-                    })
+                    try:
+                        auth_user = supabase_admin.auth.admin.get_user_by_id(tu["user_id"])
+                        users.append({
+                            "user_id": tu["user_id"],
+                            "email": auth_user.user.email,
+                            "company_name": tenant["name"],
+                            "country": tenant.get("country", ""),
+                            "status": tenant.get("status", ""),
+                            "plan": tenant.get("plan", ""),
+                            "trial_ends_at": tenant.get("trial_ends_at", ""),
+                            "created_at": tenant.get("created_at", ""),
+                            "tenant_id": tenant["id"]
+                        })
+                    except Exception:
+                        pass
 
         return {"users": users}
 
@@ -369,4 +378,175 @@ def admin_delete_user(user_id: str):
         return {"message": "User deleted successfully"}
     except Exception as e:
         print(f"[ADMIN DELETE ERROR] {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- ADMIN - SUSPEND / UNSUSPEND ----------------------------------------
+
+class SuspendRequest(BaseModel):
+    action: str
+
+@router.post("/admin/suspend/{user_id}")
+def admin_suspend_user(user_id: str, data: SuspendRequest):
+    try:
+        tenant_user = supabase_admin.table("tenant_users")\
+            .select("tenant_id")\
+            .eq("user_id", user_id)\
+            .eq("role", "owner")\
+            .single()\
+            .execute()
+
+        tenant_id = tenant_user.data["tenant_id"]
+        new_status = "suspended" if data.action == "suspend" else "trial"
+
+        supabase_admin.table("tenants")\
+            .update({"status": new_status})\
+            .eq("id", tenant_id)\
+            .execute()
+
+        return {"message": f"User {data.action}ed successfully"}
+
+    except Exception as e:
+        print(f"[SUSPEND ERROR] {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- ADMIN - GRANT / REVOKE FULL ACCESS ---------------------------------
+
+class AccessRequest(BaseModel):
+    action: str
+
+@router.post("/admin/access/{user_id}")
+def admin_grant_access(user_id: str, data: AccessRequest):
+    try:
+        tenant_user = supabase_admin.table("tenant_users")\
+            .select("tenant_id")\
+            .eq("user_id", user_id)\
+            .eq("role", "owner")\
+            .single()\
+            .execute()
+
+        tenant_id = tenant_user.data["tenant_id"]
+
+        if data.action == "grant":
+            supabase_admin.table("tenants")\
+                .update({"status": "comped", "plan": "comped"})\
+                .eq("id", tenant_id)\
+                .execute()
+        else:
+            supabase_admin.table("tenants")\
+                .update({"status": "trial", "plan": None})\
+                .eq("id", tenant_id)\
+                .execute()
+
+        return {"message": f"Access {data.action}ed successfully"}
+
+    except Exception as e:
+        print(f"[ACCESS ERROR] {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- ADMIN - EXTEND TRIAL -----------------------------------------------
+
+class ExtendTrialRequest(BaseModel):
+    days: int
+
+@router.post("/admin/extend-trial/{user_id}")
+def admin_extend_trial(user_id: str, data: ExtendTrialRequest):
+    try:
+        tenant_user = supabase_admin.table("tenant_users")\
+            .select("tenant_id")\
+            .eq("user_id", user_id)\
+            .eq("role", "owner")\
+            .single()\
+            .execute()
+
+        tenant_id = tenant_user.data["tenant_id"]
+
+        tenant = supabase_admin.table("tenants")\
+            .select("trial_ends_at")\
+            .eq("id", tenant_id)\
+            .single()\
+            .execute()
+
+        current_end = tenant.data.get("trial_ends_at")
+        if current_end:
+            current_dt = datetime.fromisoformat(current_end.replace("Z", "+00:00"))
+            if current_dt < datetime.now(current_dt.tzinfo):
+                new_end = datetime.now(current_dt.tzinfo) + timedelta(days=data.days)
+            else:
+                new_end = current_dt + timedelta(days=data.days)
+        else:
+            new_end = datetime.utcnow() + timedelta(days=data.days)
+
+        supabase_admin.table("tenants")\
+            .update({
+                "trial_ends_at": new_end.isoformat(),
+                "status": "trial"
+            })\
+            .eq("id", tenant_id)\
+            .execute()
+
+        return {"message": f"Trial extended by {data.days} days"}
+
+    except Exception as e:
+        print(f"[EXTEND TRIAL ERROR] {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- ADMIN - CREATE TEST ACCOUNT ----------------------------------------
+
+class CreateAccountRequest(BaseModel):
+    company_name: str
+    email: str
+    password: str
+    country: str = "NZ"
+
+@router.post("/admin/create-account")
+def admin_create_account(data: CreateAccountRequest):
+    try:
+        auth_response = supabase_admin.auth.admin.create_user({
+            "email": data.email,
+            "password": data.password,
+            "email_confirm": True
+        })
+        user_id = auth_response.user.id
+
+        slug = data.company_name.lower().replace(" ", "-") + "-test"
+
+        tenant = supabase_admin.table("tenants").insert({
+            "name": data.company_name,
+            "slug": slug,
+            "status": "comped",
+            "plan": "comped",
+            "trial_ends_at": (datetime.utcnow() + timedelta(days=365)).isoformat(),
+            "country": data.country,
+        }).execute()
+
+        tenant_id = tenant.data[0]["id"]
+
+        supabase_admin.table("tenant_users").insert({
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "role": "owner",
+            "status": "active"
+        }).execute()
+
+        domain = data.email.split('@')[-1]
+        supabase_admin.table("domains").insert({
+            "tenant_id": tenant_id,
+            "domain": domain,
+            "is_primary": True,
+            "verified": True
+        }).execute()
+
+        return {
+            "message": "Test account created successfully",
+            "tenant_id": tenant_id,
+            "email": data.email,
+            "login_url": "https://app.secureit360.co/login"
+        }
+
+    except Exception as e:
+        print(f"[CREATE ACCOUNT ERROR] {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
