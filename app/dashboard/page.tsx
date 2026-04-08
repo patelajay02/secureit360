@@ -161,7 +161,6 @@ function VoiceGuideModal({ finding, onClose }: { finding: any, onClose: () => vo
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-lg w-full max-h-screen overflow-y-auto">
-
         <div className="flex justify-between items-start mb-4">
           <h3 className="text-white font-semibold text-lg pr-4">{finding.title}</h3>
           <button onClick={handleClose} className="text-gray-500 hover:text-white text-xl flex-shrink-0">X</button>
@@ -187,30 +186,20 @@ function VoiceGuideModal({ finding, onClose }: { finding: any, onClose: () => vo
           </div>
 
           <div className="flex justify-center gap-2 flex-wrap">
-            <button
-              onClick={handlePrev}
-              disabled={currentStep === 0}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
+            <button onClick={handlePrev} disabled={currentStep === 0}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
               Prev
             </button>
-            <button
-              onClick={handlePlay}
-              className={`px-5 py-2 rounded-lg font-semibold text-white text-sm transition-colors ${speaking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700'}`}
-            >
+            <button onClick={handlePlay}
+              className={`px-5 py-2 rounded-lg font-semibold text-white text-sm transition-colors ${speaking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700'}`}>
               {speaking ? 'Pause' : paused ? 'Resume' : 'Play'}
             </button>
-            <button
-              onClick={handleNext}
-              disabled={currentStep >= steps.length - 1}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
+            <button onClick={handleNext} disabled={currentStep >= steps.length - 1}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
               Next
             </button>
-            <button
-              onClick={handlePlayAgain}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-600 hover:bg-gray-500 transition-colors"
-            >
+            <button onClick={handlePlayAgain}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-600 hover:bg-gray-500 transition-colors">
               Restart
             </button>
           </div>
@@ -221,30 +210,15 @@ function VoiceGuideModal({ finding, onClose }: { finding: any, onClose: () => vo
           <h4 className="text-gray-300 font-medium mb-3 text-sm uppercase tracking-wide">Steps</h4>
           <ol className="space-y-2">
             {steps.map((step, i) => (
-              <li
-                key={i}
-                className={`flex gap-3 rounded-lg p-3 transition-colors border ${
-                  i === currentStep && speaking
-                    ? 'bg-red-900/20 border-red-900/40'
-                    : done[i]
-                    ? 'bg-green-900/10 border-green-900/30'
-                    : 'border-transparent'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={done[i] || false}
-                  onChange={() => toggleDone(i)}
-                  className="mt-1 flex-shrink-0 accent-green-500 w-4 h-4 cursor-pointer"
-                />
+              <li key={i} className={`flex gap-3 rounded-lg p-3 transition-colors border ${
+                i === currentStep && speaking ? 'bg-red-900/20 border-red-900/40' :
+                done[i] ? 'bg-green-900/10 border-green-900/30' : 'border-transparent'
+              }`}>
+                <input type="checkbox" checked={done[i] || false} onChange={() => toggleDone(i)}
+                  className="mt-1 flex-shrink-0 accent-green-500 w-4 h-4 cursor-pointer" />
                 <div className="flex-1">
-                  <span className={`text-xs font-bold mr-2 ${i === currentStep && speaking ? 'text-red-400' : 'text-gray-500'}`}>
-                    {i + 1}.
-                  </span>
-                  <span className={`text-sm leading-relaxed ${
-                    done[i] ? 'line-through text-gray-500' :
-                    i === currentStep && speaking ? 'text-white font-medium' : 'text-gray-300'
-                  }`}>{step}</span>
+                  <span className={`text-xs font-bold mr-2 ${i === currentStep && speaking ? 'text-red-400' : 'text-gray-500'}`}>{i + 1}.</span>
+                  <span className={`text-sm leading-relaxed ${done[i] ? 'line-through text-gray-500' : i === currentStep && speaking ? 'text-white font-medium' : 'text-gray-300'}`}>{step}</span>
                 </div>
               </li>
             ))}
@@ -276,6 +250,7 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [voiceFinding, setVoiceFinding] = useState<any>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -289,6 +264,7 @@ export default function DashboardPage() {
     setPlan(localStorage.getItem('plan'))
     setStatus(localStorage.getItem('status'))
     setTrialEndsAt(localStorage.getItem('trial_ends_at'))
+    setLogoUrl(localStorage.getItem('logo_url'))
     fetchDashboard(token)
   }, [])
 
@@ -299,6 +275,10 @@ export default function DashboardPage() {
       })
       const data = await response.json()
       setDashboard(data)
+      if (data.logo_url) {
+        setLogoUrl(data.logo_url)
+        localStorage.setItem('logo_url', data.logo_url)
+      }
     } catch (err) {
       console.error('Failed to load dashboard')
     } finally {
@@ -319,6 +299,10 @@ export default function DashboardPage() {
     const now = new Date()
     const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return Math.max(0, diff)
+  }
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().substring(0, 2)
   }
 
   const getScoreColor = (score: number) => {
@@ -472,7 +456,16 @@ export default function DashboardPage() {
           <a href="/dashboard/scanning" className="text-gray-400 hover:text-white text-sm">Run Scan</a>
           <a href="/settings" className="text-gray-400 hover:text-white text-sm">Settings</a>
           <a href="/pricing" className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1 rounded-lg font-medium">Upgrade</a>
-          <span className="text-gray-400 text-sm">{companyName}</span>
+          <div className="flex items-center gap-2">
+            {logoUrl ? (
+              <img src={logoUrl} alt={companyName} className="h-7 w-auto max-w-20 object-contain rounded" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-red-900/50 flex items-center justify-center">
+                <span className="text-red-300 text-xs font-bold">{getInitials(companyName)}</span>
+              </div>
+            )}
+            <span className="text-gray-400 text-sm">{companyName}</span>
+          </div>
           <button onClick={handleLogout} className="text-gray-400 hover:text-white text-sm">Sign out</button>
         </div>
       </nav>
