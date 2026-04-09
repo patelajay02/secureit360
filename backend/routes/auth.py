@@ -1,5 +1,6 @@
 ﻿# SecureIT360 - Authentication Routes
 import threading
+import hashlib
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from typing import Optional
@@ -76,11 +77,13 @@ def register(data: RegisterRequest):
             "status": "active"
         }).execute()
 
+        verify_token = "secureit360-verify=" + hashlib.sha256(f"{tenant_id}:{company_domain}".encode()).hexdigest()[:24]
         supabase_admin.table("domains").insert({
             "tenant_id": tenant_id,
             "domain": company_domain,
             "is_primary": True,
-            "verified": False
+            "verified": False,
+            "verify_token": verify_token
         }).execute()
 
         company_name = data.company_name
@@ -589,4 +592,5 @@ def verify_email(data: dict):
     except Exception as e:
         print(f"[VERIFY EMAIL ERROR] {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
