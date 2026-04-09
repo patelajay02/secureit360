@@ -170,6 +170,12 @@ async def stripe_webhook(request: Request):
 
     event_type = event["type"]
     data = event["data"]["object"]
+    # Convert to plain dict for reliable access
+    import json
+    try:
+        data = json.loads(json.dumps(data, default=str))
+    except Exception:
+        pass
 
     if event_type == "checkout.session.completed":
         try:
@@ -247,5 +253,6 @@ async def stripe_webhook(request: Request):
                 .execute()
 
     return JSONResponse(content={"received": True})
+
 
 
