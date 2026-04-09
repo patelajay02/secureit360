@@ -93,7 +93,7 @@ def register(data: RegisterRequest):
                     "type": "signup",
                     "email": email,
                     "options": {
-                        "redirect_to": "https://app.secureit360.co/login"
+                        "redirect_to": "https://app.secureit360.co/auth-confirm"
                     }
                 })
                 verification_url = link_response.properties.action_link
@@ -589,3 +589,4 @@ def verify_email(data: dict):
     except Exception as e:
         print(f"[VERIFY EMAIL ERROR] {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
