@@ -61,7 +61,7 @@ def register(data: RegisterRequest):
         tenant = supabase_admin.table("tenants").insert({
             "name": data.company_name,
             "slug": slug,
-            "status": "trial",
+            "status": "pending",
             "trial_ends_at": (datetime.utcnow() + timedelta(days=7)).isoformat(),
             "country": data.country,
             "mobile": data.mobile
@@ -105,7 +105,7 @@ def register(data: RegisterRequest):
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                             <h2 style="color: #dc2626;">Welcome to SecureIT360!</h2>
                             <p>Hi {company_name},</p>
-                            <p>Thank you for registering. Your 7-day free trial has started.</p>
+                            <p>Thank you for registering. Your 7-day free trial will start once you verify your email.</p>
                             <p>Please click the button below to verify your email address and activate your account:</p>
                             <div style="text-align: center; margin: 30px 0;">
                                 <a href="{verification_url}" style="display: inline-block; background-color: #dc2626; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Verify My Email</a>
@@ -127,7 +127,7 @@ def register(data: RegisterRequest):
         threading.Thread(target=send_verification_email).start()
 
         return {
-            "message": "Account created successfully",
+            "message": "Account created successfully. Please check your email to verify your account.",
             "tenant_id": tenant_id,
             "email": data.email
         }
@@ -164,6 +164,12 @@ def login(data: LoginRequest):
 
         tenant = tenant_user.data["tenants"]
         tenant_status = tenant.get("status")
+
+        if tenant_status == "pending":
+            raise HTTPException(
+                status_code=403,
+                detail="Please verify your email address before logging in. Check your inbox for the verification link."
+            )
 
         if tenant_status == "trial":
             trial_ends_at = tenant.get("trial_ends_at")
@@ -371,8 +377,6 @@ def admin_get_users():
 
 # --- ADMIN - DELETE USER ------------------------------------------------
 
-# --- ADMIN - DELETE USER ------------------------------------------------
-
 @router.delete("/admin/delete/{user_id}")
 def admin_delete_user(user_id: str):
     try:
@@ -381,6 +385,7 @@ def admin_delete_user(user_id: str):
     except Exception as e:
         print(f"[ADMIN DELETE ERROR] {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 # --- ADMIN - SUSPEND / UNSUSPEND ----------------------------------------
 
