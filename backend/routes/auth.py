@@ -395,6 +395,7 @@ def admin_delete_user(user_id: str):
             supabase_admin.auth.admin.delete_user(user_id)
         except Exception as auth_error:
             print(f"[ADMIN DELETE AUTH ERROR] {str(auth_error)}")
+            supabase_admin.rpc("delete_auth_user", {"p_user_id": user_id}).execute()
         return {"message": "User deleted successfully"}
     except Exception as e:
         print(f"[ADMIN DELETE ERROR] {str(e)}")
