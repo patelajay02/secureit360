@@ -1,9 +1,11 @@
-"use client";
-import { useSearchParams } from "next/navigation";
+﻿"use client";
+import { useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 
 function VerifyEmailContent() {
   const params = useSearchParams();
+  const router = useRouter();
   const email = params.get("email") || "your email address";
 
   return (
@@ -14,11 +16,9 @@ function VerifyEmailContent() {
         </h1>
         <p className="text-gray-400 mb-8">by Global Cyber Assurance</p>
         <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800">
-          <div className="text-5xl mb-6">??</div>
+          <div className="text-5xl mb-6">📧</div>
           <h2 className="text-xl font-semibold text-white mb-4">Check your email</h2>
-          <p className="text-gray-400 mb-4">
-            We have sent a verification link to:
-          </p>
+          <p className="text-gray-400 mb-4">We have sent a verification link to:</p>
           <p className="text-white font-semibold mb-6">{email}</p>
           <p className="text-gray-400 text-sm mb-6">
             Please click the link in the email to verify your account and activate your 7-day free trial.
