@@ -169,18 +169,26 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     event_type = event["type"]
-    data = event["data"]["object"]
-    # Convert to plain dict for reliable access
+    raw_data = event["data"]["object"]
     import json
     try:
-        data = json.loads(json.dumps(data, default=str))
+        data = json.loads(str(raw_data))
     except Exception:
-        pass
+        try:
+            data = json.loads(json.dumps(dict(raw_data), default=str))
+        except Exception:
+            data = raw_data
 
     if event_type == "checkout.session.completed":
         try:
-            raw_metadata = data["metadata"]
-            metadata = dict(raw_metadata) if raw_metadata else {}
+            metadata = {}
+            meta = getattr(raw_data, "metadata", None) or raw_data.get("metadata", {})
+            if meta:
+                for k in ["tenant_id", "plan"]:
+                    v = getattr(meta, k, None) or (meta.get(k) if hasattr(meta, "get") else None)
+                    if v:
+                        metadata[k] = v
+            print(f"[WEBHOOK] metadata extracted: {metadata}")
         except Exception as meta_err:
             print(f"[WEBHOOK] metadata parse error: {meta_err}")
             metadata = {}
@@ -253,6 +261,8 @@ async def stripe_webhook(request: Request):
                 .execute()
 
     return JSONResponse(content={"received": True})
+
+
 
 
 
