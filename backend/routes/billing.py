@@ -173,8 +173,15 @@ async def stripe_webhook(request: Request):
 
     if event_type == "checkout.session.completed":
         try:
-            metadata = dict(data.metadata) if hasattr(data, "metadata") else {}
-        except Exception:
+            raw_metadata = data["metadata"] if hasattr(data, "__getitem__") else getattr(data, "metadata", {})
+            if raw_metadata is None:
+                metadata = {}
+            elif isinstance(raw_metadata, dict):
+                metadata = raw_metadata
+            else:
+                metadata = {k: v for k, v in raw_metadata.items()}
+        except Exception as meta_err:
+            print(f"[WEBHOOK] metadata parse error: {meta_err}")
             metadata = {}
         tenant_id = metadata.get("tenant_id")
         plan = metadata.get("plan", "starter")
@@ -245,3 +252,4 @@ async def stripe_webhook(request: Request):
                 .execute()
 
     return JSONResponse(content={"received": True})
+
