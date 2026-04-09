@@ -172,10 +172,12 @@ async def stripe_webhook(request: Request):
     data = event["data"]["object"]
 
     if event_type == "checkout.session.completed":
-        tenant_id = data.get("metadata", {}).get("tenant_id")
-        plan = data.get("metadata", {}).get("plan", "starter")
-        subscription_id = data.get("subscription")
-
+        metadata = data.get("metadata") if hasattr(data, "get") else {}
+        if not isinstance(metadata, dict):
+            metadata = dict(metadata) if metadata else {}
+        tenant_id = metadata.get("tenant_id")
+        plan = metadata.get("plan", "starter")
+        subscription_id = data.get("subscription") if hasattr(data, "get") else getattr(data, "subscription", None)
         if tenant_id:
             supabase_admin.table("subscriptions").upsert({
                 "tenant_id": tenant_id,
