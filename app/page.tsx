@@ -192,6 +192,8 @@ export default function LandingPage() {
               "NZ Privacy Amendment 2025",
               "AU Privacy Act 1988",
               "AU Cyber Security Act 2024",
+              "India DPDP Act 2023",
+              "UAE PDPL 2021",
               "Essential Eight",
               "ISO 27001",
             ].map((reg, i) => (
@@ -257,6 +259,7 @@ export default function LandingPage() {
     </main>
   )
 }
+
 
 
 
