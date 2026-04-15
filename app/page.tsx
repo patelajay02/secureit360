@@ -203,14 +203,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing Teaser */}
-      <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-        <h3 className="text-3xl font-bold text-white mb-4">Simple, Transparent Pricing</h3>
-        <p className="text-gray-400 mb-2">Plans starting from <span className="text-white font-semibold">$250 NZD/month + GST</span></p>
-        <p className="text-gray-500 text-sm mb-8">Pricing shown in your local currency after signup. 7-day free trial included — no credit card required.</p>
-        <a href="/signup" className="inline-block bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors">See Pricing After Signup</a>
-      </section>
-
       {/* CTA */}
       <section className="bg-red-900/20 border-y border-red-900/40">
         <div className="max-w-4xl mx-auto px-6 py-16 text-center">
@@ -265,6 +257,7 @@ export default function LandingPage() {
     </main>
   )
 }
+
 
 
 
