@@ -18,7 +18,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-gray-400 hover:text-white text-sm">Features</a>
             <a href="#how-it-works" className="text-gray-400 hover:text-white text-sm">How it works</a>
-            <a href="#pricing" className="text-gray-400 hover:text-white text-sm">Pricing</a>
+            
             <a href="/login" className="text-gray-400 hover:text-white text-sm">Sign in</a>
             <a href="/signup" className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg font-medium">Start free trial</a>
           </div>
@@ -221,7 +221,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <h4 className="text-white font-bold mb-3">SecureIT<span className="text-red-500">360</span></h4>
-              <p className="text-gray-500 text-sm">Cyber security for small and medium businesses in New Zealand and Australia.</p>
+              <p className="text-gray-500 text-sm">Cyber security for small and medium businesses across New Zealand, Australia, Pacific Islands, India and the UAE.</p>
               <p className="text-gray-600 text-xs mt-3">By Global Cyber Assurance Ltd</p>
             </div>
             <div>
@@ -229,7 +229,7 @@ export default function LandingPage() {
               <ul className="space-y-2">
                 <li><a href="/signup" className="text-gray-500 hover:text-white text-sm">Start free trial</a></li>
                 <li><a href="/login" className="text-gray-500 hover:text-white text-sm">Sign in</a></li>
-                <li><a href="#pricing" className="text-gray-500 hover:text-white text-sm">Pricing</a></li>
+                
               </ul>
             </div>
             <div>
@@ -257,6 +257,8 @@ export default function LandingPage() {
     </main>
   )
 }
+
+
 
 
 
