@@ -203,7 +203,7 @@ async def send_weekly_email_for_tenant(tenant, supabase):
 async def run_monthly_reports(supabase):
     print(f"[Scheduler] Monthly reports started at {datetime.now(NZ_TIMEZONE)}")
     try:
-       result = supabase.table("tenants").select("*").in_("status", ["active", "comped"]).execute()
+        result = supabase.table("tenants").select("*").in_("status", ["active", "comped"]).execute()
         tenants = result.data or []
         for tenant in tenants:
             try:
