@@ -20,6 +20,24 @@ NZ_TIMEZONE = pytz.timezone("Pacific/Auckland")
 scheduler = AsyncIOScheduler(timezone=NZ_TIMEZONE)
 
 
+def get_owner_email(supabase, tenant_id: str):
+    """Looks up the owner email for a tenant via Supabase Auth."""
+    try:
+        user_result = supabase.table("tenant_users")\
+            .select("user_id")\
+            .eq("tenant_id", tenant_id)\
+            .eq("role", "owner")\
+            .execute()
+        if user_result.data:
+            user_id = user_result.data[0].get("user_id")
+            if user_id:
+                auth_user = supabase.auth.admin.get_user_by_id(user_id)
+                return auth_user.user.email if auth_user and auth_user.user else None
+    except Exception as e:
+        print(f"[Scheduler] Error getting owner email for tenant {tenant_id}: {e}")
+    return None
+
+
 # ─── Daily Scan Job ───────────────────────────────────────────────────────────
 
 async def run_daily_scans(supabase):
@@ -41,16 +59,7 @@ async def scan_tenant_and_alert(tenant, supabase):
     tenant_id = tenant.get("id")
     company_name = tenant.get("company_name", "Your company")
 
-    user_result = supabase.table("tenant_users")\
-        .select("users(email)")\
-        .eq("tenant_id", tenant_id)\
-        .eq("role", "owner")\
-        .execute()
-
-    owner_email = None
-    if user_result.data:
-        owner_email = user_result.data[0].get("users", {}).get("email")
-
+    owner_email = get_owner_email(supabase, tenant_id)
     if not owner_email:
         print(f"[Scheduler] No owner email for tenant {tenant_id}")
         return
@@ -122,19 +131,13 @@ async def send_weekly_email_for_tenant(tenant, supabase):
     to_email = tenant.get("director_email") or None
 
     if not to_email:
-        user_result = supabase.table("tenant_users")\
-            .select("users(email)")\
-            .eq("tenant_id", tenant_id)\
-            .eq("role", "owner")\
-            .execute()
-        if user_result.data:
-            to_email = user_result.data[0].get("users", {}).get("email")
+        to_email = get_owner_email(supabase, tenant_id)
 
     if not to_email:
         print(f"[Scheduler] No email address for tenant {tenant_id} — skipping weekly email")
         return
 
-    # Get latest completed scan
+    # Get latest two completed scans
     latest_scan_result = supabase.table("scans")\
         .select("id, ransom_risk_score, governance_score, director_liability_score")\
         .eq("tenant_id", tenant_id)\
@@ -170,8 +173,7 @@ async def send_weekly_email_for_tenant(tenant, supabase):
             .execute()
         top_actions = findings_result.data or []
 
-    # Get unresolved findings count from latest scan
-    unresolved_count = 0
+    # Get unresolved findings from latest scan
     unresolved_findings = []
     if scans:
         scan_id = scans[0]["id"]
@@ -182,7 +184,6 @@ async def send_weekly_email_for_tenant(tenant, supabase):
             .order("severity", desc=True)\
             .execute()
         unresolved_findings = unresolved_result.data or []
-        unresolved_count = len(unresolved_findings)
 
     print(f"[Scheduler] Sending weekly email to {to_email} for {company_name}")
 
@@ -218,16 +219,7 @@ async def send_monthly_report_for_tenant(tenant, supabase):
     tenant_id = tenant.get("id")
     company_name = tenant.get("company_name", "Your company")
 
-    user_result = supabase.table("tenant_users")\
-        .select("users(email)")\
-        .eq("tenant_id", tenant_id)\
-        .eq("role", "owner")\
-        .execute()
-
-    owner_email = None
-    if user_result.data:
-        owner_email = user_result.data[0].get("users", {}).get("email")
-
+    owner_email = get_owner_email(supabase, tenant_id)
     if not owner_email:
         return
 
