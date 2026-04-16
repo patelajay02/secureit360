@@ -163,7 +163,7 @@ async def send_weekly_email_for_tenant(tenant, supabase):
     if scans:
         scan_id = scans[0]["id"]
         findings_result = supabase.table("findings")\
-            .select("*")\
+            .select("id, title, severity, description, governance_gap")\
             .eq("scan_id", scan_id)\
             .order("severity", desc=True)\
             .limit(3)\
@@ -175,7 +175,7 @@ async def send_weekly_email_for_tenant(tenant, supabase):
     if scans:
         scan_id = scans[0]["id"]
         unresolved_result = supabase.table("findings")\
-            .select("title, severity, plain_english")\
+            .select("title, severity, description")\
             .eq("scan_id", scan_id)\
             .neq("status", "fixed")\
             .order("severity", desc=True)\

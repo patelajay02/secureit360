@@ -70,7 +70,7 @@ def send_alert_email(company_name: str, to_email: str, findings: list):
         <tr>
             <td style="padding:12px 16px; border-bottom:1px solid #fee2e2;">
                 <strong style="color:#dc2626;">{f.get('title', 'Security issue found')}</strong><br>
-                <span style="color:#374151; font-size:14px;">{f.get('plain_english', '')}</span>
+                <span style="color:#374151; font-size:14px;">{f.get('description', '')}</span>
             </td>
         </tr>
         """
@@ -85,22 +85,20 @@ def send_alert_email(company_name: str, to_email: str, findings: list):
 
             <div style="background:#111827; border-radius:12px 12px 0 0; padding:24px 32px;">
                 <h1 style="color:#fff; margin:0; font-size:22px;">
-                    SecureIT<span style="color:#dc2626;">360</span> <span style="color:#9ca3af; font-weight:400;">Security Alert</span>
+                    SecureIT<span style="color:#dc2626;">360</span>
+                    <span style="color:#9ca3af; font-weight:400;"> Security Alert</span>
                 </h1>
-                <p style="color:#6b7280; margin:4px 0 0 0; font-size:13px;">
-                    by Global Cyber Assurance
-                </p>
+                <p style="color:#6b7280; margin:4px 0 0 0; font-size:13px;">by Global Cyber Assurance</p>
             </div>
 
             <div style="background:#ffffff; padding:32px; border-left:1px solid #e5e7eb; border-right:1px solid #e5e7eb;">
-                <p style="color:#111827; font-size:16px; margin-top:0;">
-                    Hi {company_name} team,
-                </p>
+                <p style="color:#111827; font-size:16px; margin-top:0;">Hi {company_name} team,</p>
                 <p style="color:#374151; font-size:15px;">
                     Our daily scan found <strong>{len(findings)} new security risk{"s" if len(findings) > 1 else ""}</strong> that need your attention:
                 </p>
 
-                <table style="width:100%; border-collapse:collapse; margin:16px 0; background:#fef2f2; border-radius:8px; border:1px solid #fee2e2;">
+                <table style="width:100%; border-collapse:collapse; margin:16px 0; background:#fef2f2;
+                              border-radius:8px; border:1px solid #fee2e2;">
                     {findings_html}
                 </table>
 
@@ -142,7 +140,8 @@ def send_score_improvement_email(company_name: str, to_email: str, old_score: in
 
             <div style="background:#111827; border-radius:12px 12px 0 0; padding:24px 32px;">
                 <h1 style="color:#fff; margin:0; font-size:22px;">
-                    SecureIT<span style="color:#dc2626;">360</span> <span style="color:#9ca3af; font-weight:400;">Good News</span>
+                    SecureIT<span style="color:#dc2626;">360</span>
+                    <span style="color:#9ca3af; font-weight:400;"> Good News</span>
                 </h1>
                 <p style="color:#6b7280; margin:4px 0 0 0; font-size:13px;">by Global Cyber Assurance</p>
             </div>
@@ -200,18 +199,14 @@ def send_weekly_director_email(
     director_liability_score: int = None,
     unresolved_findings: list = None,
 ):
-    """Sent every Monday at 8am NZ time to the director email address."""
-
     if unresolved_findings is None:
         unresolved_findings = []
 
     score_change = current_score - previous_score
 
-    # Send improvement email too if score dropped significantly
     if score_change <= -10:
         send_score_improvement_email(company_name, to_email, previous_score, current_score)
 
-    # Score change label
     if score_change > 0:
         change_html = f'<span style="color:#dc2626;">▲ Up {score_change} points from last week</span>'
         change_note = "Your risk has increased this week. Please review the actions below."
@@ -222,7 +217,6 @@ def send_weekly_director_email(
         change_html = '<span style="color:#6b7280;">— No change from last week</span>'
         change_note = "Your risk level is unchanged this week."
 
-    # Risk score colour
     if current_score >= 60:
         score_color = "#dc2626"
         score_label = "High Risk"
@@ -233,7 +227,7 @@ def send_weekly_director_email(
         score_color = "#16a34a"
         score_label = "Low Risk"
 
-    # Governance score block
+    # Governance + Director Liability block
     if governance_score is not None:
         if governance_score >= 70:
             gov_color = "#16a34a"
@@ -245,20 +239,26 @@ def send_weekly_director_email(
             gov_color = "#dc2626"
             gov_label = "Weak"
 
+        liab_score = director_liability_score
+        liab_color = "#dc2626" if (liab_score or 0) >= 60 else "#d97706" if (liab_score or 0) >= 30 else "#16a34a"
+        liab_display = str(liab_score) if liab_score is not None else "—"
+
         governance_html = f"""
         <table style="width:100%; border-collapse:collapse; margin:24px 0;">
             <tr>
                 <td style="width:50%; padding-right:8px;">
-                    <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:20px; text-align:center;">
+                    <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+                                padding:20px; text-align:center;">
                         <div style="color:#6b7280; font-size:13px; margin-bottom:6px;">Governance Score</div>
                         <div style="font-size:42px; font-weight:900; color:{gov_color};">{governance_score}</div>
                         <div style="color:{gov_color}; font-size:13px; font-weight:600;">{gov_label}</div>
                     </div>
                 </td>
                 <td style="width:50%; padding-left:8px;">
-                    <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:20px; text-align:center;">
+                    <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+                                padding:20px; text-align:center;">
                         <div style="color:#6b7280; font-size:13px; margin-bottom:6px;">Director Liability Score</div>
-                        <div style="font-size:42px; font-weight:900; color:{'#dc2626' if (director_liability_score or 0) >= 60 else '#d97706' if (director_liability_score or 0) >= 30 else '#16a34a'};">{director_liability_score if director_liability_score is not None else "—"}</div>
+                        <div style="font-size:42px; font-weight:900; color:{liab_color};">{liab_display}</div>
                         <div style="color:#6b7280; font-size:12px; margin-top:4px;">Personal exposure risk</div>
                     </div>
                 </td>
@@ -268,7 +268,7 @@ def send_weekly_director_email(
     else:
         governance_html = ""
 
-    # Top 3 recommended actions
+    # Top 3 actions
     actions_html = ""
     for i, action in enumerate(top_actions[:3], 1):
         severity = action.get("severity", "medium")
@@ -289,7 +289,7 @@ def send_weekly_director_email(
                     <tr>
                         <td>
                             <strong style="color:#111827; font-size:15px;">{i}. {action.get('title', '')}</strong><br>
-                            <span style="color:#374151; font-size:13px;">{action.get('plain_english', '')}</span>
+                            <span style="color:#374151; font-size:13px;">{action.get('description', '')}</span>
                         </td>
                         <td style="text-align:right; vertical-align:top; padding-left:12px;">
                             <span style="background:{sev_color}; color:#fff; font-size:11px; font-weight:600;
@@ -303,7 +303,7 @@ def send_weekly_director_email(
         </tr>
         """
 
-    # Unresolved findings list
+    # Unresolved findings
     if unresolved_findings:
         unresolved_rows = ""
         for f in unresolved_findings[:10]:
@@ -318,7 +318,7 @@ def send_weekly_director_email(
                 </td>
             </tr>
             """
-
+        extra = f"<p style='color:#6b7280; font-size:12px; margin-top:8px;'>Showing top 10 — view full list in your dashboard.</p>" if len(unresolved_findings) > 10 else ""
         unresolved_html = f"""
         <h2 style="color:#111827; font-size:16px; margin:28px 0 12px 0;">
             Unresolved findings ({len(unresolved_findings)})
@@ -326,11 +326,12 @@ def send_weekly_director_email(
         <table style="width:100%; border-collapse:collapse; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden;">
             {unresolved_rows}
         </table>
-        {"<p style='color:#6b7280; font-size:12px; margin-top:8px;'>Showing top 10 — view full list in your dashboard.</p>" if len(unresolved_findings) > 10 else ""}
+        {extra}
         """
     else:
         unresolved_html = """
-        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:16px; margin:24px 0; text-align:center;">
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:16px;
+                    margin:24px 0; text-align:center;">
             <span style="color:#16a34a; font-weight:600;">✓ No unresolved findings this week. Excellent work!</span>
         </div>
         """
@@ -343,7 +344,6 @@ def send_weekly_director_email(
     <body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, sans-serif;">
         <div style="max-width:600px; margin:0 auto; padding:32px 16px;">
 
-            <!-- Header -->
             <div style="background:#111827; border-radius:12px 12px 0 0; padding:24px 32px;">
                 <h1 style="color:#fff; margin:0; font-size:22px;">
                     SecureIT<span style="color:#dc2626;">360</span>
@@ -354,12 +354,9 @@ def send_weekly_director_email(
                 </p>
             </div>
 
-            <!-- Body -->
             <div style="background:#ffffff; padding:32px; border-left:1px solid #e5e7eb; border-right:1px solid #e5e7eb;">
 
-                <p style="color:#111827; font-size:16px; margin-top:0;">
-                    Hi {company_name},
-                </p>
+                <p style="color:#111827; font-size:16px; margin-top:0;">Hi {company_name},</p>
                 <p style="color:#374151; font-size:14px; margin-bottom:24px;">
                     Here is your weekly cyber security summary from Global Cyber Assurance.
                 </p>
@@ -375,12 +372,8 @@ def send_weekly_director_email(
                     <div style="font-size:15px; color:{score_color}; font-weight:600; margin:4px 0;">
                         {score_label}
                     </div>
-                    <div style="font-size:14px; margin-top:10px;">
-                        {change_html}
-                    </div>
-                    <p style="color:#6b7280; font-size:13px; margin:6px 0 0 0;">
-                        {change_note}
-                    </p>
+                    <div style="font-size:14px; margin-top:10px;">{change_html}</div>
+                    <p style="color:#6b7280; font-size:13px; margin:6px 0 0 0;">{change_note}</p>
                 </div>
 
                 <!-- Governance + Director Liability -->
@@ -411,7 +404,6 @@ def send_weekly_director_email(
             </div>
 
             {footer_html(to_email)}
-
         </div>
     </body>
     </html>
