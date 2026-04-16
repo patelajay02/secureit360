@@ -25,7 +25,7 @@ scheduler = AsyncIOScheduler(timezone=NZ_TIMEZONE)
 async def run_daily_scans(supabase):
     print(f"[Scheduler] Daily scan started at {datetime.now(NZ_TIMEZONE)}")
     try:
-        result = supabase.table("tenants").select("*").eq("status", "active").execute()
+        result = supabase.table("tenants").select("*").in_("status", ["active", "comped"]).execute()
         tenants = result.data or []
         print(f"[Scheduler] Running scans for {len(tenants)} tenants")
         for tenant in tenants:
@@ -103,7 +103,7 @@ async def scan_tenant_and_alert(tenant, supabase):
 async def run_weekly_director_emails(supabase):
     print(f"[Scheduler] Weekly director emails started at {datetime.now(NZ_TIMEZONE)}")
     try:
-        result = supabase.table("tenants").select("*").eq("status", "active").execute()
+        result = supabase.table("tenants").select("*").in_("status", ["active", "comped"]).execute()
         tenants = result.data or []
         for tenant in tenants:
             try:
@@ -203,7 +203,7 @@ async def send_weekly_email_for_tenant(tenant, supabase):
 async def run_monthly_reports(supabase):
     print(f"[Scheduler] Monthly reports started at {datetime.now(NZ_TIMEZONE)}")
     try:
-        result = supabase.table("tenants").select("*").eq("status", "active").execute()
+       result = supabase.table("tenants").select("*").in_("status", ["active", "comped"]).execute()
         tenants = result.data or []
         for tenant in tenants:
             try:
