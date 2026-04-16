@@ -6,10 +6,10 @@ import stripe
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-PRICE_IDS = {
-    "starter": "price_1TJUKnHOFiRFdagYzzPaKk0W",
-    "pro": "price_1TJUQoHOFiRFdagYAslEYNp7",
-    "enterprise": "price_1TJUVLHOFiRFdagYTg26GvyI",
+PPRICE_IDS = {
+    "starter": "price_1TKFt2Qlh6VW9EggtrvcYKIV",
+    "pro": "price_1TKFt5Qlh6VW9EggC7i0K0Kz",
+    "enterprise": "price_1TKFt5Qlh6VW9Eggfx2rhwfT",
 }
 
 PLANS = {

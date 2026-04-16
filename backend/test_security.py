@@ -4,7 +4,7 @@
 
 import requests
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "https://secureit360-production.up.railway.app"
 
 print("=" * 50)
 print("SecureIT360 - Security Test")
@@ -13,10 +13,11 @@ print("=" * 50)
 # Step 1: Register Company A
 print("\n1. Registering Company A...")
 company_a = requests.post(f"{BASE_URL}/auth/register", json={
-    "email": "owner@company-a.com",
+    "email": "owner@company-a.co.nz",
     "password": "TestPassword123!",
     "company_name": "Company A",
-    "domain": "company-a.co.nz"
+    "domain": "company-a.co.nz",
+    "country": "NZ"
 })
 if company_a.status_code == 200:
     print("   Company A registered successfully")
@@ -26,10 +27,11 @@ else:
 # Step 2: Register Company B
 print("\n2. Registering Company B...")
 company_b = requests.post(f"{BASE_URL}/auth/register", json={
-    "email": "owner@company-b.com",
+    "email": "owner@company-b.co.nz",
     "password": "TestPassword123!",
     "company_name": "Company B",
-    "domain": "company-b.co.nz"
+    "domain": "company-b.co.nz",
+    "country": "NZ"
 })
 if company_b.status_code == 200:
     print("   Company B registered successfully")
@@ -39,7 +41,7 @@ else:
 # Step 3: Log in as Company A
 print("\n3. Logging in as Company A...")
 login_a = requests.post(f"{BASE_URL}/auth/login", json={
-    "email": "owner@company-a.com",
+    "email": "owner@company-a.co.nz",
     "password": "TestPassword123!"
 })
 if login_a.status_code == 200:
@@ -53,10 +55,11 @@ else:
 # Step 4: Log in as Company B
 print("\n4. Logging in as Company B...")
 login_b = requests.post(f"{BASE_URL}/auth/login", json={
-    "email": "owner@company-b.com",
+    "email": "owner@company-b.co.nz",
     "password": "TestPassword123!"
 })
 if login_b.status_code == 200:
+    token_b = login_b.json()["token"]
     tenant_b_id = login_b.json()["tenant_id"]
     print(f"   Logged in. Tenant ID: {tenant_b_id}")
 else:
@@ -68,8 +71,11 @@ print("\n5. Testing domain isolation...")
 headers_a = {"Authorization": f"Bearer {token_a}"}
 domains_a = requests.get(f"{BASE_URL}/domains/", headers=headers_a)
 if domains_a.status_code == 200:
-    domains = domains_a.json()["domains"]
-    all_belong_to_a = all(d["tenant_id"] == tenant_a_id for d in domains)
+    domains = domains_a.json()
+    if isinstance(domains, list):
+        all_belong_to_a = all(d["tenant_id"] == tenant_a_id for d in domains)
+    else:
+        all_belong_to_a = all(d["tenant_id"] == tenant_a_id for d in domains.get("domains", []))
     if all_belong_to_a:
         print("   PASS - Company A can only see their own domains")
     else:
@@ -89,12 +95,32 @@ else:
 print("\n7. Testing user isolation...")
 users_a = requests.get(f"{BASE_URL}/auth/users", headers=headers_a)
 if users_a.status_code == 200:
-    users = users_a.json()["users"]
-    all_belong_to_a = all(u["tenant_id"] == tenant_a_id for u in users)
+    users = users_a.json()
+    if isinstance(users, list):
+        all_belong_to_a = all(u["tenant_id"] == tenant_a_id for u in users)
+    else:
+        all_belong_to_a = all(u["tenant_id"] == tenant_a_id for u in users.get("users", []))
     if all_belong_to_a:
         print("   PASS - Company A can only see their own users")
     else:
         print("   FAIL - Company A can see other company users!")
+else:
+    print(f"   Error: {users_a.text}")
+
+# Step 8: Test that Company A cannot access Company B dashboard
+print("\n8. Testing dashboard isolation...")
+headers_b = {"Authorization": f"Bearer {token_b}"}
+dash_a = requests.get(f"{BASE_URL}/dashboard/", headers=headers_a)
+dash_b = requests.get(f"{BASE_URL}/dashboard/", headers=headers_b)
+if dash_a.status_code == 200 and dash_b.status_code == 200:
+    data_a = dash_a.json()
+    data_b = dash_b.json()
+    if data_a != data_b:
+        print("   PASS - Company A and B see different dashboard data")
+    else:
+        print("   FAIL - Company A and B see identical dashboard data!")
+else:
+    print(f"   Dashboard A: {dash_a.status_code}, Dashboard B: {dash_b.status_code}")
 
 print("\n" + "=" * 50)
 print("Security Test Complete")
