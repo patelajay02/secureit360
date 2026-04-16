@@ -60,7 +60,7 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const [usersRes, domainsRes, billingRes, tenantRes] = await Promise.all([
-        authFetch("/users"),
+        authFetch("/auth/users"),
         authFetch("/domains"),
         authFetch("/billing/subscription"),
         authFetch("/tenants/me"),
