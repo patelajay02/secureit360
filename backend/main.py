@@ -3,7 +3,7 @@
 # Creates the FastAPI app, sets up CORS, connects all routes, and starts the scheduler.
 
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -22,7 +22,8 @@ from routes.email_preview import router as email_preview_router
 from routes.tenants import router as tenants_router
 
 # Import scheduler
-from services.scheduler import start_scheduler
+from services.scheduler import start_scheduler, send_weekly_email_for_tenant
+from services.database import supabase_admin
 
 # Create Supabase client
 supabase = create_client(
@@ -79,3 +80,29 @@ app.include_router(tenants_router, prefix="/tenants", tags=["Tenants"])
 @app.get("/health")
 def health_check():
     return {"status": "ok", "product": "SecureIT360"}
+
+# --- TEMP: Test weekly director email -----------------------------------
+# Remove this endpoint after launch testing is complete
+
+@app.post("/test/weekly-email")
+async def test_weekly_email(x_test_secret: str = Header(...)):
+    """Triggers the weekly director email for all active tenants. For testing only."""
+    if x_test_secret != "secureit360-test-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        result = supabase_admin.table("tenants").select("*").eq("status", "active").execute()
+        tenants = result.data or []
+
+        if not tenants:
+            return {"message": "No active tenants found.", "sent": 0}
+
+        sent = 0
+        for tenant in tenants:
+            await send_weekly_email_for_tenant(tenant, supabase_admin)
+            sent += 1
+
+        return {"message": f"Weekly email triggered for {sent} tenant(s).", "sent": sent}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
