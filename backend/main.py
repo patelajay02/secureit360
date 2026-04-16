@@ -91,7 +91,7 @@ async def test_weekly_email(x_test_secret: str = Header(...)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-        result = supabase_admin.table("tenants").select("*").eq("status", "active").execute()
+        result = supabase_admin.table("tenants").select("*").in_("status", ["active", "comped"]).execute()
         tenants = result.data or []
 
         if not tenants:
