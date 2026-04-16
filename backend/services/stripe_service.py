@@ -6,7 +6,7 @@ import stripe
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-PPRICE_IDS = {
+PRICE_IDS = {
     "starter": "price_1TKFt2Qlh6VW9EggtrvcYKIV",
     "pro": "price_1TKFt5Qlh6VW9EggC7i0K0Kz",
     "enterprise": "price_1TKFt5Qlh6VW9Eggfx2rhwfT",
