@@ -43,6 +43,30 @@ const VOICE_GUIDE_STEPS: Record<string, string[]> = {
     "Ask them to block port 445 on your firewall or router.",
     "Ensure Windows file sharing is not exposed to the public internet.",
     "Run your scan again to confirm this issue is resolved."
+  ],
+  "inactive Microsoft 365 accounts": [
+    "Log in to admin.microsoft.com.",
+    "Go to Users then Active Users.",
+    "Search for each flagged account by name.",
+    "Click the account and select Block sign-in to immediately prevent access.",
+    "For accounts that should be deleted, select Delete user instead.",
+    "Run your scan again to confirm resolved."
+  ],
+  "MFA not enabled": [
+    "Log in to admin.microsoft.com.",
+    "Go to Users then Active Users.",
+    "Click Multi-factor authentication at the top.",
+    "Find each flagged user and enable MFA.",
+    "The user will be prompted to set up MFA on next login.",
+    "Run your scan again to confirm resolved."
+  ],
+  "admin privilege": [
+    "Log in to admin.microsoft.com.",
+    "Go to Users then Active Users.",
+    "Click each flagged admin account.",
+    "Select Manage roles.",
+    "Remove Global Administrator and assign a more limited role like User Administrator only if needed.",
+    "Run your scan again to confirm resolved."
   ]
 }
 
@@ -140,6 +164,23 @@ function ReauthModal({ onVerified, onClose }: { onVerified: () => void, onClose:
 
 function MS365DetailsModal({ finding, onClose }: { finding: any, onClose: () => void }) {
   const users: any[] = finding?.metadata?.affected_users || []
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null)
+
+  async function copyEmail(email: string) {
+    try {
+      await navigator.clipboard.writeText(email)
+      setCopiedEmail(email)
+      setTimeout(() => setCopiedEmail(null), 2000)
+    } catch {}
+  }
+
+  function adminCenterUrl(u: any): string {
+    if (u.azure_object_id) {
+      return `https://admin.microsoft.com/Adminportal/Home#/users/:/UserDetails/${u.azure_object_id}`
+    }
+    return `https://admin.microsoft.com/Adminportal/Home#/users`
+  }
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-4">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -153,21 +194,42 @@ function MS365DetailsModal({ finding, onClose }: { finding: any, onClose: () => 
             <p className="text-gray-500 text-xs uppercase tracking-wide mb-3">Affected accounts ({users.length})</p>
             <div className="space-y-2">
               {users.map((u, i) => (
-                <div key={i} className="bg-gray-800 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{u.name || 'Unknown'}</p>
-                    <p className="text-gray-400 text-xs truncate">{u.email || '—'}</p>
-                    {u.roles && <p className="text-gray-500 text-xs mt-0.5">Roles: {u.roles}</p>}
-                    {u.last_login && u.last_login !== 'Never' && (
-                      <p className="text-gray-600 text-xs mt-0.5">
-                        Last login: {new Date(u.last_login).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
-                    )}
-                    {u.last_login === 'Never' && <p className="text-gray-600 text-xs mt-0.5">Last login: Never</p>}
+                <div key={i} className="bg-gray-800 rounded-xl px-4 py-3 flex flex-col gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{u.name || 'Unknown'}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-gray-400 text-xs truncate">{u.email || '—'}</p>
+                        {u.email && (
+                          <button
+                            onClick={() => copyEmail(u.email)}
+                            className="text-xs px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white flex-shrink-0 transition-colors"
+                          >
+                            {copiedEmail === u.email ? 'Copied!' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                      {u.roles && <p className="text-gray-500 text-xs mt-0.5">Roles: {u.roles}</p>}
+                      {u.last_login && u.last_login !== 'Never' && (
+                        <p className="text-gray-600 text-xs mt-0.5">
+                          Last login: {new Date(u.last_login).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      )}
+                      {u.last_login === 'Never' && <p className="text-gray-600 text-xs mt-0.5">Last login: Never</p>}
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded bg-amber-900/40 text-amber-300 border border-amber-800 flex-shrink-0 self-start">
+                      {u.recommended_action}
+                    </span>
                   </div>
-                  <span className="text-xs px-2 py-1 rounded bg-amber-900/40 text-amber-300 border border-amber-800 flex-shrink-0 self-start sm:self-auto">
-                    {u.recommended_action}
-                  </span>
+                  <a
+                    href={adminCenterUrl(u)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 border border-blue-800/60 transition-colors self-start"
+                  >
+                    Manage in Admin Center →
+                  </a>
                 </div>
               ))}
             </div>

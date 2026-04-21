@@ -132,7 +132,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                 ),
                 "governance_gap": True,
                 "regulations": frameworks,
-                "fix_type": "configuration",
+                "fix_type": "voice",
                 "score_impact": min(25, n * 3),
                 "status": "open",
                 "metadata": _sanitize_metadata({
@@ -140,6 +140,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                         {
                             "name": u.get("userDisplayName", "Unknown"),
                             "email": u.get("userPrincipalName", ""),
+                            "azure_object_id": u.get("id"),
                             "last_login": None,
                             "recommended_action": "Enable MFA immediately",
                         }
@@ -177,7 +178,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                 ),
                 "governance_gap": True,
                 "regulations": frameworks,
-                "fix_type": "configuration",
+                "fix_type": "voice",
                 "score_impact": min(15, n * 2),
                 "status": "open",
                 "metadata": _sanitize_metadata({
@@ -185,6 +186,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                         {
                             "name": u.get("displayName", "Unknown"),
                             "email": u.get("userPrincipalName", ""),
+                            "azure_object_id": u.get("id"),
                             "last_login": (
                                 u.get("signInActivity", {}).get("lastSignInDateTime") or "Never"
                             ),
@@ -209,7 +211,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
             for m in members.get("value", []):
                 key = m.get("userPrincipalName") or m.get("id", "unknown")
                 if key not in admin_map:
-                    admin_map[key] = {"name": m.get("displayName", "Unknown"), "email": key, "roles": []}
+                    admin_map[key] = {"name": m.get("displayName", "Unknown"), "email": key, "roles": [], "azure_object_id": m.get("id")}
                 admin_map[key]["roles"].append(role_name)
 
         if len(admin_map) > 3:
@@ -227,7 +229,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                 ),
                 "governance_gap": True,
                 "regulations": frameworks,
-                "fix_type": "configuration",
+                "fix_type": "voice",
                 "score_impact": min(15, n * 2),
                 "status": "open",
                 "metadata": _sanitize_metadata({
@@ -235,6 +237,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                         {
                             "name": info["name"],
                             "email": info["email"],
+                            "azure_object_id": info.get("azure_object_id"),
                             "roles": ", ".join(info["roles"]),
                             "last_login": None,
                             "recommended_action": "Review and remove unnecessary admin access",
@@ -279,7 +282,7 @@ async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
                 ),
                 "governance_gap": True,
                 "regulations": frameworks,
-                "fix_type": "configuration",
+                "fix_type": "voice",
                 "score_impact": min(20, external_count * 2),
                 "status": "open",
                 "metadata": {"external_share_count": external_count},
