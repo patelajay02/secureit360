@@ -44,6 +44,30 @@ const VOICE_GUIDE_STEPS: Record<string, string[]> = {
     "Ensure Windows file sharing is not exposed to the public internet.",
     "Run your scan again to confirm this issue is resolved."
   ],
+  "Google MFA not enabled": [
+    "Log in to admin.google.com.",
+    "Go to Security then 2-Step Verification.",
+    "Find each flagged user in the Users section and click their account.",
+    "Under Security, confirm 2-Step Verification is enrolled.",
+    "To enforce 2SV for all users, go to Security then Authentication then 2-Step Verification and set Enforcement to On.",
+    "Run your scan again to confirm resolved."
+  ],
+  "inactive Google Workspace accounts": [
+    "Log in to admin.google.com.",
+    "Go to Directory then Users.",
+    "Search for each flagged account by name.",
+    "Click the account and select Suspend user to immediately prevent access.",
+    "For accounts that should be permanently removed, select Delete user instead.",
+    "Run your scan again to confirm resolved."
+  ],
+  "Google admin privilege": [
+    "Log in to admin.google.com.",
+    "Go to Directory then Users.",
+    "Click each flagged admin account.",
+    "Select Admin roles and privileges.",
+    "Remove Super Admin and assign a more limited role only if administrative access is still needed.",
+    "Run your scan again to confirm resolved."
+  ],
   "inactive Microsoft 365 accounts": [
     "Log in to admin.microsoft.com.",
     "Go to Users then Active Users.",
@@ -174,9 +198,15 @@ function MS365DetailsModal({ finding, onClose }: { finding: any, onClose: () => 
     } catch {}
   }
 
-  function adminCenterUrl(u: any): string {
+  function adminCenterUrl(u: any, engine?: string): string {
+    if (u.google_user_id) {
+      return `https://admin.google.com/ac/users/${u.google_user_id}`
+    }
     if (u.azure_object_id) {
       return `https://admin.microsoft.com/Adminportal/Home#/users/:/UserDetails/${u.azure_object_id}`
+    }
+    if (engine === 'google_workspace') {
+      return `https://admin.google.com/ac/users`
     }
     return `https://admin.microsoft.com/Adminportal/Home#/users`
   }
@@ -222,7 +252,7 @@ function MS365DetailsModal({ finding, onClose }: { finding: any, onClose: () => 
                     </span>
                   </div>
                   <a
-                    href={adminCenterUrl(u)}
+                    href={adminCenterUrl(u, finding.engine)}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -860,7 +890,7 @@ export default function DashboardPage() {
             <h3 className="text-white font-semibold mb-4">Your top security issues</h3>
             <div className="space-y-4">
               {dashboard.top_findings.map((finding: any, index: number) => {
-                const hasMeta = finding.engine === 'microsoft365' && Array.isArray(finding.metadata?.affected_users) && finding.metadata.affected_users.length > 0
+                const hasMeta = (finding.engine === 'microsoft365' || finding.engine === 'google_workspace') && Array.isArray(finding.metadata?.affected_users) && finding.metadata.affected_users.length > 0
                 return (
                   <div
                     key={index}

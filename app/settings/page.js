@@ -60,6 +60,7 @@ export default function SettingsPage() {
 
   const [integrations, setIntegrations] = useState([]);
   const [ms365Scanning, setMs365Scanning] = useState(false);
+  const [googleScanning, setGoogleScanning] = useState(false);
 
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -92,7 +93,9 @@ export default function SettingsPage() {
     if (params.get("tab") === "integrations") setActiveTab("integrations");
     if (params.get("ms_connected")) setSuccess("Microsoft 365 connected successfully.");
     if (params.get("ms_error")) setError(`Microsoft 365 connection failed: ${params.get("ms_error")}`);
-    if (params.get("ms_connected") || params.get("ms_error") || params.get("tab")) {
+    if (params.get("google_connected")) setSuccess("Google Workspace connected successfully.");
+    if (params.get("google_error")) setError(`Google Workspace connection failed: ${params.get("google_error")}`);
+    if (params.get("ms_connected") || params.get("ms_error") || params.get("google_connected") || params.get("google_error") || params.get("tab")) {
       window.history.replaceState({}, "", "/settings");
     }
 
@@ -171,6 +174,46 @@ export default function SettingsPage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setMs365Scanning(false);
+    }
+  }
+
+  async function handleGoogleConnect() {
+    try {
+      const res = await authFetch("/integrations/google/auth");
+      if (!res.ok) { setError("Could not start Google Workspace connection."); return; }
+      const data = await res.json();
+      if (data.auth_url) window.location.href = data.auth_url;
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
+  }
+
+  async function handleGoogleDisconnect() {
+    if (!confirm("Disconnect Google Workspace? Existing findings will remain but no new scans will run.")) return;
+    try {
+      const res = await authFetch("/integrations/google/disconnect", { method: "DELETE" });
+      if (!res.ok) { setError("Could not disconnect Google Workspace."); return; }
+      setSuccess("Google Workspace disconnected.");
+      fetchAll();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
+  }
+
+  async function handleGoogleScan() {
+    setGoogleScanning(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await authFetch("/integrations/google/scan", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setError(data.detail || "Scan failed."); return; }
+      setSuccess(`Google Workspace scan complete — ${data.findings_count} finding${data.findings_count !== 1 ? "s" : ""} recorded.`);
+      fetchAll();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setGoogleScanning(false);
     }
   }
 
@@ -364,6 +407,9 @@ export default function SettingsPage() {
 
   const ms365 = integrations.find((i) => i.platform === "microsoft365");
   const ms365Connected = ms365?.status === "connected";
+
+  const google = integrations.find((i) => i.platform === "google_workspace");
+  const googleConnected = google?.status === "connected";
 
   const trialExpiry = billing?.created_at ? getTrialExpiry(billing.created_at) : null;
   const trialDaysLeft = trialExpiry ? daysLeft(trialExpiry) : null;
@@ -693,7 +739,7 @@ export default function SettingsPage() {
                 </p>
 
                 {/* Microsoft 365 card */}
-                <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+                <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 mb-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
@@ -758,6 +804,76 @@ export default function SettingsPage() {
                         className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                       >
                         Connect Microsoft 365
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {/* Google Workspace card */}
+                <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
+                        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-white font-semibold">Google Workspace</div>
+                        <div className="text-gray-400 text-sm mt-0.5">
+                          Scan for 2SV gaps, inactive accounts, admin sprawl, and external file sharing.
+                        </div>
+                        {googleConnected && google.org_name && (
+                          <div className="text-gray-500 text-xs mt-1">
+                            Connected to <span className="text-gray-300">{google.org_name}</span>
+                          </div>
+                        )}
+                        {googleConnected && google.last_synced_at && (
+                          <div className="text-gray-600 text-xs mt-0.5">
+                            Last scanned {new Date(google.last_synced_at).toLocaleDateString("en-NZ", {
+                              day: "numeric", month: "short", year: "numeric"
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-xs font-medium px-3 py-1 rounded-full flex-shrink-0 ${
+                      googleConnected
+                        ? "bg-green-900/50 text-green-300 border border-green-800"
+                        : "bg-gray-800 text-gray-500 border border-gray-700"
+                    }`}>
+                      {googleConnected ? "Connected" : "Not connected"}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 pt-5 border-t border-gray-800">
+                    <div className="text-gray-500 text-xs mb-4">
+                      Checks performed: 2SV status · Inactive users (90+ days) · Admin privilege sprawl · External file sharing
+                    </div>
+                    {googleConnected ? (
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleGoogleScan}
+                          disabled={googleScanning}
+                          className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {googleScanning ? "Scanning..." : "Run scan"}
+                        </button>
+                        <button
+                          onClick={handleGoogleDisconnect}
+                          className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleGoogleConnect}
+                        className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Connect Google Workspace
                       </button>
                     )}
                   </div>
