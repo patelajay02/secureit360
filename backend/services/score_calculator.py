@@ -176,3 +176,51 @@ def calculate_governance_score(tenant_id: str, scan_id: str) -> dict:
 
     except Exception as e:
         return {"error": str(e)}
+
+
+def calculate_director_liability_score(tenant_id: str, scan_id: str) -> dict:
+    """
+    Compute director personal liability score from MS365, Google Workspace,
+    and threat intel findings across ALL open tenant findings.
+    Stored against the triggering scan for record-keeping.
+    """
+    try:
+        findings = supabase_admin.table("findings")\
+            .select("engine, title")\
+            .eq("tenant_id", tenant_id)\
+            .eq("status", "open")\
+            .execute()
+
+        score = 0
+        for f in findings.data:
+            engine = f.get("engine", "")
+            title = (f.get("title") or "").lower()
+
+            if engine in ("microsoft365", "google_workspace"):
+                if "inactive" in title and "account" in title:
+                    score += 10
+                elif "mfa" in title or "2-step" in title or "2sv" in title:
+                    score += 5
+                elif "admin" in title and "privilege" in title:
+                    score += 15
+
+            elif engine == "threat_intel":
+                if "data breach" in title or ("email account" in title and "exposed" in title):
+                    score += 20
+                elif "typosquat" in title or "impersonat" in title:
+                    score += 25
+                elif "flagged" in title and ("ip address" in title or "blacklist" in title or "abuse" in title):
+                    score += 10
+
+        director_liability_score = min(100, score)
+
+        supabase_admin.table("scans")\
+            .update({"director_liability_score": director_liability_score})\
+            .eq("id", scan_id)\
+            .eq("tenant_id", tenant_id)\
+            .execute()
+
+        return {"director_liability_score": director_liability_score}
+
+    except Exception as e:
+        return {"error": str(e)}

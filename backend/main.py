@@ -22,6 +22,7 @@ from routes.email_preview import router as email_preview_router
 from routes.tenants import router as tenants_router
 from routes.integrations import router as integrations_router
 from routes.google_workspace import router as google_workspace_router
+from routes.threat_intel import router as threat_intel_router
 
 # Import scheduler
 from services.scheduler import start_scheduler, send_weekly_email_for_tenant
@@ -79,6 +80,7 @@ app.include_router(email_preview_router, prefix="/email", tags=["Email Preview"]
 app.include_router(tenants_router, prefix="/tenants", tags=["Tenants"])
 app.include_router(integrations_router, prefix="/integrations", tags=["Integrations"])
 app.include_router(google_workspace_router, prefix="/integrations/google", tags=["Google Workspace"])
+app.include_router(threat_intel_router, prefix="/threat-intel", tags=["Threat Intelligence"])
 
 # --- Health check -------------------------------------------------------
 

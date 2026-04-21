@@ -551,6 +551,18 @@ export default function DashboardPage() {
     return 'Low Risk'
   }
 
+  const getDlsColor = (score: number) => {
+    if (score >= 60) return '#ef4444'
+    if (score >= 30) return '#f97316'
+    return '#22c55e'
+  }
+
+  const getDlsLabel = (score: number) => {
+    if (score >= 60) return 'High Exposure'
+    if (score >= 30) return 'Medium Exposure'
+    return 'Low Exposure'
+  }
+
   const getGovernanceLabel = (score: number) => {
     if (score > 50) return 'Governance gaps found'
     if (score > 25) return 'Some gaps detected'
@@ -671,7 +683,9 @@ export default function DashboardPage() {
 
   const ransomScore = dashboard?.ransom_score ?? 0
   const governanceScore = dashboard?.governance_score ?? 0
+  const dlsScore = dashboard?.director_liability_score ?? 0
   const scoreColor = getScoreColor(ransomScore)
+  const dlsColor = getDlsColor(dlsScore)
   const penaltyInfo = dashboard?.penalty_info
   const regulations = getRegulations(dashboard?.compliance, country)
   const trialDaysLeft = getTrialDaysLeft()
@@ -771,44 +785,64 @@ export default function DashboardPage() {
         )}
 
         {dashboard?.ransom_score && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
-              <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">Ransom Risk Score</h3>
-              <div className="relative inline-flex items-center justify-center mb-4">
-                <svg width="160" height="160" viewBox="0 0 160 160">
-                  <circle cx="80" cy="80" r="70" fill="none" stroke="#1f2937" strokeWidth="12"/>
-                  <circle cx="80" cy="80" r="70" fill="none" stroke={scoreColor} strokeWidth="12"
-                    strokeDasharray={`${(ransomScore / 100) * 440} 440`}
-                    strokeLinecap="round" transform="rotate(-90 80 80)"/>
-                </svg>
-                <div className="absolute text-center">
-                  <p className="text-4xl font-bold" style={{color: scoreColor}}>{ransomScore}</p>
-                  <p className="text-gray-400 text-xs">out of 100</p>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">Ransom Risk Score</h3>
+                <div className="relative inline-flex items-center justify-center mb-4">
+                  <svg width="160" height="160" viewBox="0 0 160 160">
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="#1f2937" strokeWidth="12"/>
+                    <circle cx="80" cy="80" r="70" fill="none" stroke={scoreColor} strokeWidth="12"
+                      strokeDasharray={`${(ransomScore / 100) * 440} 440`}
+                      strokeLinecap="round" transform="rotate(-90 80 80)"/>
+                  </svg>
+                  <div className="absolute text-center">
+                    <p className="text-4xl font-bold" style={{color: scoreColor}}>{ransomScore}</p>
+                    <p className="text-gray-400 text-xs">out of 100</p>
+                  </div>
                 </div>
+                <p className="text-lg font-semibold" style={{color: scoreColor}}>{getRiskLabel(ransomScore)}</p>
+                <p className="text-gray-500 text-sm mt-2">Higher score = higher risk of ransomware attack</p>
               </div>
-              <p className="text-lg font-semibold" style={{color: scoreColor}}>{getRiskLabel(ransomScore)}</p>
-              <p className="text-gray-500 text-sm mt-2">Higher score = higher risk of ransomware attack</p>
+
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">Governance Score</h3>
+                <div className="relative inline-flex items-center justify-center mb-4">
+                  <svg width="160" height="160" viewBox="0 0 160 160">
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="#1f2937" strokeWidth="12"/>
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="#a855f7" strokeWidth="12"
+                      strokeDasharray={`${(governanceScore / 100) * 440} 440`}
+                      strokeLinecap="round" transform="rotate(-90 80 80)"/>
+                  </svg>
+                  <div className="absolute text-center">
+                    <p className="text-4xl font-bold" style={{color: '#a855f7'}}>{governanceScore}</p>
+                    <p className="text-gray-400 text-xs">out of 100</p>
+                  </div>
+                </div>
+                <p className="text-lg font-semibold" style={{color: '#a855f7'}}>{getGovernanceLabel(governanceScore)}</p>
+                <p className="text-gray-500 text-sm mt-2">Policy and process gaps that technical fixes alone cannot resolve.</p>
+              </div>
+
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">Director Liability Score</h3>
+                <div className="relative inline-flex items-center justify-center mb-4">
+                  <svg width="160" height="160" viewBox="0 0 160 160">
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="#1f2937" strokeWidth="12"/>
+                    <circle cx="80" cy="80" r="70" fill="none" stroke={dlsColor} strokeWidth="12"
+                      strokeDasharray={`${(dlsScore / 100) * 440} 440`}
+                      strokeLinecap="round" transform="rotate(-90 80 80)"/>
+                  </svg>
+                  <div className="absolute text-center">
+                    <p className="text-4xl font-bold" style={{color: dlsColor}}>{dlsScore}</p>
+                    <p className="text-gray-400 text-xs">out of 100</p>
+                  </div>
+                </div>
+                <p className="text-lg font-semibold" style={{color: dlsColor}}>{getDlsLabel(dlsScore)}</p>
+                <p className="text-gray-500 text-sm mt-2">Personal exposure risk from cloud and threat intel findings.</p>
+              </div>
             </div>
 
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
-              <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">Governance Score</h3>
-              <div className="relative inline-flex items-center justify-center mb-4">
-                <svg width="160" height="160" viewBox="0 0 160 160">
-                  <circle cx="80" cy="80" r="70" fill="none" stroke="#1f2937" strokeWidth="12"/>
-                  <circle cx="80" cy="80" r="70" fill="none" stroke="#a855f7" strokeWidth="12"
-                    strokeDasharray={`${(governanceScore / 100) * 440} 440`}
-                    strokeLinecap="round" transform="rotate(-90 80 80)"/>
-                </svg>
-                <div className="absolute text-center">
-                  <p className="text-4xl font-bold" style={{color: '#a855f7'}}>{governanceScore}</p>
-                  <p className="text-gray-400 text-xs">out of 100</p>
-                </div>
-              </div>
-              <p className="text-lg font-semibold" style={{color: '#a855f7'}}>{getGovernanceLabel(governanceScore)}</p>
-              <p className="text-gray-500 text-sm mt-2">Policy and process gaps that technical fixes alone cannot resolve.</p>
-            </div>
-
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-8">
               <h3 className="text-gray-400 text-sm mb-4 uppercase tracking-wide">If Attacked Today</h3>
               <div className="space-y-3">
                 <div className="flex justify-between items-center border-b border-gray-800 pb-3">
@@ -836,7 +870,7 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-          </div>
+          </>
         )}
 
         <div className="bg-gray-900 border border-red-900/50 rounded-2xl p-5 mb-8 flex items-center justify-between gap-4">

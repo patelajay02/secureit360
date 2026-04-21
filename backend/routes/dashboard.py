@@ -43,6 +43,31 @@ def calculate_governance_score(findings: list) -> int:
     return max(0, min(100, score))
 
 
+def calculate_director_liability_score(findings: list) -> int:
+    score = 0
+    for f in findings:
+        engine = f.get("engine", "")
+        title = (f.get("title") or "").lower()
+
+        if engine in ("microsoft365", "google_workspace"):
+            if "inactive" in title and "account" in title:
+                score += 10
+            elif "mfa" in title or "2-step" in title or "2sv" in title:
+                score += 5
+            elif "admin" in title and "privilege" in title:
+                score += 15
+
+        elif engine == "threat_intel":
+            if "data breach" in title or ("email account" in title and "exposed" in title):
+                score += 20
+            elif "typosquat" in title or "impersonat" in title:
+                score += 25
+            elif "flagged" in title and ("ip address" in title or "blacklist" in title or "abuse" in title):
+                score += 10
+
+    return min(100, score)
+
+
 def get_penalty_info(findings: list, country: str) -> dict:
     has_critical = any(f["severity"] == "critical" for f in findings)
     has_moderate = any(f["severity"] == "moderate" for f in findings)
@@ -237,7 +262,7 @@ def get_penalty_info(findings: list, country: str) -> dict:
             }
 
 
-_ALL_ENGINES = ["darkweb", "email", "network", "website", "devices", "cloud", "microsoft365"]
+_ALL_ENGINES = ["darkweb", "email", "network", "website", "devices", "cloud", "microsoft365", "google_workspace", "threat_intel"]
 _EXTRA_FRAMEWORK_KEYS = {
     "GDPR": "gdpr",
     "HIPAA": "hipaa",
@@ -347,6 +372,7 @@ def get_dashboard(authorization: str = Header(...)):
 
         ransom_score = calculate_ransom_score(findings.data)
         governance_score = calculate_governance_score(findings.data)
+        director_liability_score = calculate_director_liability_score(findings.data)
         compliance = calculate_compliance_scores(findings.data, country, extra_frameworks)
         penalty_info = get_penalty_info(findings.data, country)
 
@@ -363,6 +389,7 @@ def get_dashboard(authorization: str = Header(...)):
             "trial_ends_at": trial_ends_at,
             "ransom_score": ransom_score,
             "governance_score": governance_score,
+            "director_liability_score": director_liability_score,
             "findings_summary": {
                 "critical": len(critical),
                 "moderate": len(moderate),
