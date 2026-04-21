@@ -1,0 +1,221 @@
+import os
+import httpx
+from datetime import datetime, timezone, timedelta
+from services.database import supabase_admin
+
+GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+
+
+async def _refresh_token(integration: dict) -> str:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"https://login.microsoftonline.com/{integration['azure_tenant_id']}/oauth2/v2.0/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": os.getenv("AZURE_CLIENT_ID"),
+                "client_secret": os.getenv("AZURE_CLIENT_SECRET"),
+                "refresh_token": integration["refresh_token"],
+                "scope": "https://graph.microsoft.com/.default offline_access",
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        td = resp.json()
+
+    new_token = td["access_token"]
+    new_refresh = td.get("refresh_token", integration["refresh_token"])
+    expires_in = td.get("expires_in", 3600)
+    new_expiry = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat()
+
+    supabase_admin.table("integrations").update({
+        "access_token": new_token,
+        "refresh_token": new_refresh,
+        "token_expires_at": new_expiry,
+    }).eq("id", integration["id"]).execute()
+
+    return new_token
+
+
+async def _get_token(integration: dict) -> str:
+    expires_at = integration.get("token_expires_at")
+    if expires_at:
+        expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) < expiry - timedelta(minutes=5):
+            return integration["access_token"]
+    return await _refresh_token(integration)
+
+
+async def _graph_get(token: str, path: str, params: dict = None) -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{GRAPH_BASE}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            return {"value": []}
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
+    result = supabase_admin.table("integrations")\
+        .select("*")\
+        .eq("tenant_id", tenant_id)\
+        .eq("platform", "microsoft365")\
+        .eq("status", "connected")\
+        .single()\
+        .execute()
+
+    if not result.data:
+        return {"findings_count": 0, "skipped": True}
+
+    integration = result.data
+    try:
+        token = await _get_token(integration)
+    except Exception as e:
+        return {"findings_count": 0, "error": str(e)}
+
+    findings = []
+
+    # 1 — MFA STATUS
+    try:
+        mfa_data = await _graph_get(token, "/reports/credentialUserRegistrationDetails")
+        no_mfa = [u for u in mfa_data.get("value", []) if not u.get("isMfaRegistered")]
+        if no_mfa:
+            n = len(no_mfa)
+            findings.append({
+                "tenant_id": tenant_id,
+                "scan_id": scan_id,
+                "engine": "microsoft365",
+                "severity": "critical",
+                "title": f"MFA not enabled for {n} Microsoft 365 user{'s' if n > 1 else ''}",
+                "description": (
+                    f"{n} account{'s' if n > 1 else ''} in your Microsoft 365 tenant "
+                    "do not have multi-factor authentication registered. "
+                    "These accounts can be compromised through password spray or phishing alone."
+                ),
+                "governance_gap": True,
+                "regulations": ["NIST CSF", "ISO 27001", "ASD Essential Eight"],
+                "fix_type": "configuration",
+                "score_impact": min(25, n * 3),
+                "status": "open",
+            })
+    except Exception as e:
+        print(f"[MS365] MFA check failed: {e}")
+
+    # 2 — INACTIVE USERS (90+ days)
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        inactive_data = await _graph_get(
+            token,
+            "/users",
+            params={
+                "$select": "id,displayName,userPrincipalName,signInActivity",
+                "$filter": f"signInActivity/lastSignInDateTime le {cutoff}",
+                "$top": "100",
+            },
+        )
+        inactive = inactive_data.get("value", [])
+        if inactive:
+            n = len(inactive)
+            findings.append({
+                "tenant_id": tenant_id,
+                "scan_id": scan_id,
+                "engine": "microsoft365",
+                "severity": "moderate",
+                "title": f"{n} inactive Microsoft 365 account{'s' if n > 1 else ''} (90+ days)",
+                "description": (
+                    f"{n} user account{'s' if n > 1 else ''} have not signed in for over 90 days. "
+                    "Stale accounts expand your attack surface and should be disabled or removed."
+                ),
+                "governance_gap": True,
+                "regulations": ["ISO 27001", "ASD Essential Eight"],
+                "fix_type": "configuration",
+                "score_impact": min(15, n * 2),
+                "status": "open",
+            })
+    except Exception as e:
+        print(f"[MS365] Inactive users check failed: {e}")
+
+    # 3 — ADMIN PRIVILEGE SPRAWL
+    try:
+        roles_data = await _graph_get(token, "/directoryRoles")
+        admin_roles = [r for r in roles_data.get("value", []) if "admin" in r.get("displayName", "").lower()]
+        all_admins: set = set()
+        for role in admin_roles:
+            members = await _graph_get(token, f"/directoryRoles/{role['id']}/members")
+            for m in members.get("value", []):
+                all_admins.add(m.get("userPrincipalName") or m.get("id"))
+        if len(all_admins) > 3:
+            n = len(all_admins)
+            findings.append({
+                "tenant_id": tenant_id,
+                "scan_id": scan_id,
+                "engine": "microsoft365",
+                "severity": "moderate",
+                "title": f"{n} accounts hold Microsoft 365 admin privileges",
+                "description": (
+                    f"{n} accounts have admin roles in your Microsoft 365 tenant. "
+                    "Excessive admin accounts amplify the blast radius of any account compromise. "
+                    "Best practice is to limit admin access to 2–3 dedicated break-glass accounts."
+                ),
+                "governance_gap": True,
+                "regulations": ["NIST CSF", "ISO 27001", "ASD Essential Eight"],
+                "fix_type": "configuration",
+                "score_impact": min(15, n * 2),
+                "status": "open",
+            })
+    except Exception as e:
+        print(f"[MS365] Admin check failed: {e}")
+
+    # 4 — EXTERNAL FILE SHARING
+    try:
+        sites_data = await _graph_get(token, "/sites", params={"$select": "id,displayName,webUrl", "$top": "10"})
+        external_count = 0
+        for site in sites_data.get("value", [])[:5]:
+            try:
+                drives = await _graph_get(token, f"/sites/{site['id']}/drives")
+                for drive in drives.get("value", [])[:3]:
+                    items = await _graph_get(
+                        token,
+                        f"/drives/{drive['id']}/root/children",
+                        params={"$select": "id,name,shared", "$top": "50"},
+                    )
+                    for item in items.get("value", []):
+                        scope = item.get("shared", {}).get("scope", "")
+                        if scope in ("anonymous", "organization"):
+                            external_count += 1
+            except Exception:
+                pass
+        if external_count > 0:
+            findings.append({
+                "tenant_id": tenant_id,
+                "scan_id": scan_id,
+                "engine": "microsoft365",
+                "severity": "critical" if external_count > 10 else "moderate",
+                "title": f"{external_count} file{'s' if external_count > 1 else ''} shared externally in Microsoft 365",
+                "description": (
+                    f"{external_count} file{'s' if external_count > 1 else ''} or folder{'s' if external_count > 1 else ''} "
+                    "in your SharePoint/OneDrive are shared externally or via anonymous link. "
+                    "Uncontrolled external sharing can expose sensitive business data to unauthorised parties."
+                ),
+                "governance_gap": True,
+                "regulations": ["Privacy Act 2020 (NZ)", "Privacy Act 1988 (AU)", "ISO 27001"],
+                "fix_type": "configuration",
+                "score_impact": min(20, external_count * 2),
+                "status": "open",
+            })
+    except Exception as e:
+        print(f"[MS365] External sharing check failed: {e}")
+
+    if findings:
+        supabase_admin.table("findings").insert(findings).execute()
+
+    supabase_admin.table("integrations")\
+        .update({"last_synced_at": datetime.now(timezone.utc).isoformat()})\
+        .eq("id", integration["id"])\
+        .execute()
+
+    return {"findings_count": len(findings)}

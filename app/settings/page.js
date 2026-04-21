@@ -10,6 +10,15 @@ import { authFetch, requireAuth, getToken } from "../../lib/auth";
 
 const TRIAL_DAYS = 7;
 
+const AZURE_SCOPES = [
+  "User.Read.All",
+  "UserAuthenticationMethod.Read.All",
+  "AuditLog.Read.All",
+  "Directory.Read.All",
+  "Sites.Read.All",
+  "offline_access",
+].join(" ");
+
 function getTrialExpiry(createdAt) {
   const created = new Date(createdAt);
   const expiry = new Date(created.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
@@ -32,6 +41,9 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const [integrations, setIntegrations] = useState([]);
+  const [ms365Scanning, setMs365Scanning] = useState(false);
+
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
@@ -53,17 +65,27 @@ export default function SettingsPage() {
     if (!requireAuth(router)) return;
     setCompanyName(localStorage.getItem("company_name") || "");
     setLogoUrl(localStorage.getItem("logo_url") || null);
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "integrations") setActiveTab("integrations");
+    if (params.get("ms_connected")) setSuccess("Microsoft 365 connected successfully.");
+    if (params.get("ms_error")) setError(`Microsoft 365 connection failed: ${params.get("ms_error")}`);
+    if (params.get("ms_connected") || params.get("ms_error") || params.get("tab")) {
+      window.history.replaceState({}, "", "/settings");
+    }
+
     fetchAll();
   }, []);
 
  async function fetchAll() {
     setLoading(true);
     try {
-      const [usersRes, domainsRes, billingRes, tenantRes] = await Promise.all([
+      const [usersRes, domainsRes, billingRes, tenantRes, intRes] = await Promise.all([
         authFetch("/auth/users").catch(() => null),
         authFetch("/domains").catch(() => null),
         authFetch("/billing/subscription").catch(() => null),
         authFetch("/tenants/me").catch(() => null),
+        authFetch("/integrations/status").catch(() => null),
       ]);
       if (usersRes) setUsers(await usersRes.json().catch(() => []));
       if (domainsRes) setDomains(await domainsRes.json().catch(() => []));
@@ -72,10 +94,59 @@ export default function SettingsPage() {
         const tenantData = await tenantRes.json().catch(() => ({}));
         setDirectorEmail(tenantData.director_email || "");
       }
+      if (intRes) {
+        const intData = await intRes.json().catch(() => ({}));
+        setIntegrations(intData.integrations || []);
+      }
     } catch (err) {
       setError("Could not load settings. Please refresh the page.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleMs365Connect() {
+    const token = localStorage.getItem("token") || "";
+    const state = btoa(token).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+    const redirectUri = `${window.location.origin}/api/ms365/callback`;
+    const params = new URLSearchParams({
+      client_id: process.env.NEXT_PUBLIC_AZURE_CLIENT_ID,
+      response_type: "code",
+      redirect_uri: redirectUri,
+      scope: AZURE_SCOPES,
+      response_mode: "query",
+      prompt: "consent",
+      state,
+    });
+    window.location.href = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`;
+  }
+
+  async function handleMs365Disconnect() {
+    if (!confirm("Disconnect Microsoft 365? Existing findings will remain but no new scans will run.")) return;
+    try {
+      const res = await authFetch("/integrations/ms365/disconnect", { method: "DELETE" });
+      if (!res.ok) { setError("Could not disconnect Microsoft 365."); return; }
+      setSuccess("Microsoft 365 disconnected.");
+      fetchAll();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    }
+  }
+
+  async function handleMs365Scan() {
+    setMs365Scanning(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await authFetch("/integrations/ms365/scan", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setError(data.detail || "Scan failed."); return; }
+      setSuccess(`Microsoft 365 scan complete — ${data.findings_count} finding${data.findings_count !== 1 ? "s" : ""} recorded.`);
+      fetchAll();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setMs365Scanning(false);
     }
   }
 
@@ -238,7 +309,11 @@ export default function SettingsPage() {
     { key: "team", label: "Team" },
     { key: "domains", label: "Domains" },
     { key: "billing", label: "Billing" },
+    { key: "integrations", label: "Integrations" },
   ];
+
+  const ms365 = integrations.find((i) => i.platform === "microsoft365");
+  const ms365Connected = ms365?.status === "connected";
 
   const trialExpiry = billing?.created_at ? getTrialExpiry(billing.created_at) : null;
   const trialDaysLeft = trialExpiry ? daysLeft(trialExpiry) : null;
@@ -506,6 +581,87 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* INTEGRATIONS TAB */}
+            {activeTab === "integrations" && (
+              <div>
+                <h2 className="text-lg font-semibold mb-2">Integrations</h2>
+                <p className="text-gray-400 text-sm mb-6">
+                  Connect cloud platforms to extend your security scans beyond your domains.
+                </p>
+
+                {/* Microsoft 365 card */}
+                <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
+                        <svg width="28" height="28" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+                          <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
+                          <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
+                          <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-white font-semibold">Microsoft 365</div>
+                        <div className="text-gray-400 text-sm mt-0.5">
+                          Scan for MFA gaps, inactive accounts, admin sprawl, and external file sharing.
+                        </div>
+                        {ms365Connected && ms365.org_name && (
+                          <div className="text-gray-500 text-xs mt-1">
+                            Connected to <span className="text-gray-300">{ms365.org_name}</span>
+                          </div>
+                        )}
+                        {ms365Connected && ms365.last_synced_at && (
+                          <div className="text-gray-600 text-xs mt-0.5">
+                            Last scanned {new Date(ms365.last_synced_at).toLocaleDateString("en-NZ", {
+                              day: "numeric", month: "short", year: "numeric"
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`text-xs font-medium px-3 py-1 rounded-full flex-shrink-0 ${
+                      ms365Connected
+                        ? "bg-green-900/50 text-green-300 border border-green-800"
+                        : "bg-gray-800 text-gray-500 border border-gray-700"
+                    }`}>
+                      {ms365Connected ? "Connected" : "Not connected"}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 pt-5 border-t border-gray-800">
+                    <div className="text-gray-500 text-xs mb-4">
+                      Checks performed: MFA status · Inactive users (90+ days) · Admin privilege sprawl · External file sharing
+                    </div>
+                    {ms365Connected ? (
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleMs365Scan}
+                          disabled={ms365Scanning}
+                          className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {ms365Scanning ? "Scanning..." : "Run scan"}
+                        </button>
+                        <button
+                          onClick={handleMs365Disconnect}
+                          className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleMs365Connect}
+                        className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Connect Microsoft 365
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
