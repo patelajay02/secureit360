@@ -11,6 +11,7 @@ const ALL_ENGINES = [
   { key: "website", label: "Website & SSL Scan", description: "Checks certificates and security headers" },
   { key: "devices", label: "Device Scan", description: "Looks for unpatched software and vulnerabilities" },
   { key: "cloud", label: "Cloud Storage Scan", description: "Checks for publicly exposed cloud files" },
+  { key: "threat_intel", label: "Threat Intelligence Scan", description: "Checks your domain and IPs against abuse lists, typosquat registrations, and breach databases" },
 ];
 
 const FREE_ENGINES = ALL_ENGINES.slice(0, 2);
@@ -36,7 +37,8 @@ export default function ScanningPage() {
   const [activeEngines, setActiveEngines] = useState(FREE_ENGINES);
   const [statuses, setStatuses] = useState({
     darkweb: "pending", email: "pending",
-    network: "pending", website: "pending", devices: "pending", cloud: "pending"
+    network: "pending", website: "pending", devices: "pending", cloud: "pending",
+    threat_intel: "pending"
   });
 
   useEffect(() => {
@@ -116,7 +118,11 @@ export default function ScanningPage() {
     for (const engine of engines) {
       setStatuses(prev => ({ ...prev, [engine.key]: "running" }));
       try {
-        await authFetch(`/scans/${engine.key}`, { method: "POST", body: JSON.stringify({ domain_id: id }) });
+        if (engine.key === "threat_intel") {
+          await authFetch(`/threat-intel/scan`, { method: "POST" });
+        } else {
+          await authFetch(`/scans/${engine.key}`, { method: "POST", body: JSON.stringify({ domain_id: id }) });
+        }
       } catch (e) {
         console.error(`${engine.key} scan failed`, e);
       }

@@ -15,6 +15,8 @@ from services.email_service import (
     send_weekly_director_email,
     send_monthly_report_email,
 )
+from services.threat_intel_scan import run_threat_intel_scan
+from services.score_calculator import calculate_director_liability_score
 
 NZ_TIMEZONE = pytz.timezone("Pacific/Auckland")
 scheduler = AsyncIOScheduler(timezone=NZ_TIMEZONE)
@@ -92,6 +94,12 @@ async def scan_tenant_and_alert(tenant, supabase):
         return
 
     new_scan_id = await run_full_scan(tenant_id, domains[0], supabase)
+
+    try:
+        await run_threat_intel_scan(tenant_id, new_scan_id)
+        calculate_director_liability_score(tenant_id, new_scan_id)
+    except Exception as e:
+        print(f"[Scheduler] Threat intel scan failed for tenant {tenant_id}: {e}")
 
     new_result = supabase.table("findings")\
         .select("*")\
