@@ -45,10 +45,16 @@ def _get_tenant(authorization: str) -> tuple[str, str]:
 @router.get("/auth")
 def google_auth_url(authorization: str = Header(...)):
     """Return the full Google OAuth URL (with state) for the frontend to redirect to."""
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID env var is not set on the server")
+
+    print(f"[GWS] /auth called — client_id={client_id[:20]}... redirect_uri={_REDIRECT_URI}")
+
     token = authorization.removeprefix("Bearer ")
     state = base64.urlsafe_b64encode(token.encode()).rstrip(b"=").decode()
     params = {
-        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "client_id": client_id,
         "redirect_uri": _REDIRECT_URI,
         "response_type": "code",
         "scope": _GOOGLE_SCOPES,
@@ -57,7 +63,8 @@ def google_auth_url(authorization: str = Header(...)):
         "state": state,
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-    return {"auth_url": url}
+    print(f"[GWS] auth_url built — first 100 chars: {url[:100]}")
+    return {"auth_url": url, "debug_client_id_prefix": client_id[:30]}
 
 
 # ── Connect Google Workspace ────────────────────────────────────────────────
@@ -70,6 +77,13 @@ class GoogleConnectRequest(BaseModel):
 @router.post("/connect")
 async def connect_google(data: GoogleConnectRequest, authorization: str = Header(...)):
     try:
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET env var is not set")
+
+        print(f"[GWS] /connect called — client_id={client_id[:20]}... redirect_uri={data.redirect_uri}")
+
         user_id, tenant_id = _get_tenant(authorization)
 
         async with httpx.AsyncClient() as client:
@@ -77,8 +91,8 @@ async def connect_google(data: GoogleConnectRequest, authorization: str = Header
                 "https://oauth2.googleapis.com/token",
                 data={
                     "grant_type": "authorization_code",
-                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-                    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "code": data.code,
                     "redirect_uri": data.redirect_uri,
                 },
