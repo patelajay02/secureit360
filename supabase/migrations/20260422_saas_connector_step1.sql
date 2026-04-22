@@ -55,63 +55,33 @@ create index if not exists saas_findings_connection_id_idx
     on public.saas_findings (connection_id);
 
 -- ── delete_user_completely RPC ─────────────────────────────────────────────
--- Full replacement. Cascades through every tenant-scoped table this app
--- writes to, then removes the owner's tenant, the user's tenant_user rows,
--- and any SaaS connections the user owns (saas_findings cascade via FK).
+-- Matches the current live function exactly, plus one added line at the end
+-- to delete from saas_connections for this user (saas_findings cascade via FK).
 
-create or replace function public.delete_user_completely(p_user_id uuid)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-    v_tenant_id uuid;
-    v_domain_ids uuid[];
-    v_scan_ids uuid[];
-begin
-    -- Find the tenant this user owns (if any) and cascade its data
-    select tenant_id into v_tenant_id
-    from public.tenant_users
-    where user_id = p_user_id and role = 'owner'
-    limit 1;
-
-    if v_tenant_id is not null then
-        select coalesce(array_agg(id), '{}') into v_domain_ids
-        from public.domains
-        where tenant_id = v_tenant_id;
-
-        select coalesce(array_agg(id), '{}') into v_scan_ids
-        from public.scans
-        where tenant_id = v_tenant_id;
-
-        -- Per-scan children
-        if array_length(v_scan_ids, 1) is not null then
-            delete from public.findings where scan_id = any(v_scan_ids);
-            delete from public.scan_engine_results where scan_id = any(v_scan_ids);
-        end if;
-
-        -- Any tenant-level findings not tied to a scan
-        delete from public.findings where tenant_id = v_tenant_id;
-        delete from public.scan_engine_results where tenant_id = v_tenant_id;
-
-        delete from public.scans where tenant_id = v_tenant_id;
-        delete from public.domains where tenant_id = v_tenant_id;
-        delete from public.integrations where tenant_id = v_tenant_id;
-        delete from public.tenant_users where tenant_id = v_tenant_id;
-        delete from public.tenants where id = v_tenant_id;
-    end if;
-
-    -- Any tenant_user rows where the user isn't the owner (secondary memberships)
-    delete from public.tenant_users where user_id = p_user_id;
-
-    -- SaaS connector data for this user (saas_findings cascade via FK)
-    delete from public.saas_connections where user_id = p_user_id;
-
-    -- Finally, the auth user
-    delete from auth.users where id = p_user_id;
-end;
-$$;
+CREATE OR REPLACE FUNCTION public.delete_user_completely(p_user_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_tenant_id uuid;
+BEGIN
+  SELECT tenant_id INTO v_tenant_id
+  FROM tenant_users
+  WHERE user_id = p_user_id AND role = 'owner'
+  LIMIT 1;
+  IF v_tenant_id IS NOT NULL THEN
+    DELETE FROM scan_engine_results WHERE tenant_id = v_tenant_id;
+    DELETE FROM findings WHERE tenant_id = v_tenant_id;
+    DELETE FROM scans WHERE tenant_id = v_tenant_id;
+    DELETE FROM domains WHERE tenant_id = v_tenant_id;
+    DELETE FROM subscriptions WHERE tenant_id = v_tenant_id;
+    DELETE FROM tenant_users WHERE tenant_id = v_tenant_id;
+    DELETE FROM tenants WHERE id = v_tenant_id;
+  END IF;
+  DELETE FROM saas_connections WHERE user_id = p_user_id;
+END;
+$function$;
 
 -- ── Row-Level Security ─────────────────────────────────────────────────────
 
