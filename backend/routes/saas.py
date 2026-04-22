@@ -13,6 +13,7 @@ is reached by the browser after the SaaS provider redirects the user, so
 it authenticates via the state token issued at /connect/oauth time.
 """
 
+import os
 import secrets
 import time
 import urllib.parse
@@ -31,7 +32,11 @@ from saas_connectors.scan_runner import run_scan
 router = APIRouter()
 
 
-FRONTEND_CONNECTIONS_URL = "https://app.secureit360.co/saas/connections"
+def _frontend_connections_url() -> str:
+    base = (os.getenv("FRONTEND_URL") or "https://app.secureit360.co").rstrip("/")
+    return f"{base}/saas/connections"
+
+
 STATE_TTL_SECONDS = 600  # 10 minutes is plenty for an OAuth round-trip
 
 
@@ -85,7 +90,7 @@ def _get_registry_entry(app_slug: str) -> dict[str, Any]:
 
 def _callback_error_redirect(app_slug: str, reason: str) -> RedirectResponse:
     params = urllib.parse.urlencode({"error": reason, "app": app_slug})
-    return RedirectResponse(url=f"{FRONTEND_CONNECTIONS_URL}?{params}", status_code=302)
+    return RedirectResponse(url=f"{_frontend_connections_url()}?{params}", status_code=302)
 
 
 # ── OAuth start ─────────────────────────────────────────────────────────────
@@ -176,7 +181,7 @@ def oauth_callback(app_slug: str, request: Request):
         return _callback_error_redirect(app_slug, "store_failed")
 
     params = urllib.parse.urlencode({"connected": app_slug})
-    return RedirectResponse(url=f"{FRONTEND_CONNECTIONS_URL}?{params}", status_code=302)
+    return RedirectResponse(url=f"{_frontend_connections_url()}?{params}", status_code=302)
 
 
 # ── Manual credential connect ───────────────────────────────────────────────

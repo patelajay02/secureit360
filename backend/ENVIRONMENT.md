@@ -8,6 +8,9 @@ Set these in Railway for the FastAPI service. Local dev reads them from
 - `SUPABASE_URL`
 - `SUPABASE_KEY` — anon/publishable key, used for user-scoped operations
 - `SUPABASE_SERVICE_KEY` — service-role key, used by `supabase_admin`
+- `FRONTEND_URL` — base URL of the Next.js frontend, used for OAuth
+  callback redirects. Optional; defaults to `https://app.secureit360.co`.
+  Set to e.g. `http://localhost:3000` in local dev.
 
 ## Email / notifications
 
