@@ -46,7 +46,7 @@ values (
         'auth_url', 'https://login.xero.com/identity/connect/authorize',
         'token_url', 'https://identity.xero.com/connect/token',
         'redirect_uri', 'https://secureit360-production.up.railway.app/saas/callback/xero',
-        'scopes', 'offline_access openid profile email accounting.settings accounting.contacts.read accounting.reports.read',
+        'scopes', 'offline_access openid profile email accounting.settings.read',
         'uses_pkce', true,
         'env_client_id', 'XERO_CLIENT_ID',
         'env_client_secret', 'XERO_CLIENT_SECRET'

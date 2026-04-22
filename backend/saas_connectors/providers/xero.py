@@ -34,10 +34,7 @@ CONNECTIONS_URL = "https://api.xero.com/connections"
 USERS_URL = "https://api.xero.com/api.xro/2.0/Users"
 REDIRECT_URI = "https://secureit360-production.up.railway.app/saas/callback/xero"
 
-SCOPES = (
-    "offline_access openid profile email "
-    "accounting.settings accounting.contacts.read accounting.reports.read"
-)
+SCOPES = "offline_access openid profile email accounting.settings.read"
 
 
 def _pkce_verifier() -> str:
