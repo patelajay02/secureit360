@@ -133,7 +133,7 @@ async def run_cloud_scan(tenant_id: str, scan_id: str, domain: str):
                     "NZ Privacy Act 2020 - IPP 5 (security safeguards)",
                     "AU Privacy Act 1988 - APP 11.1 (reasonable steps to protect personal information)"
                 ],
-                "auto", 0
+                "info", 0
             )
             findings_count = 1
 
