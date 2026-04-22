@@ -2,8 +2,12 @@
 -- pgcrypto helper RPCs used by backend/saas_connectors/credential_vault.py
 -- Plaintext credentials only cross the wire to these SECURITY DEFINER
 -- functions; pgp_sym_encrypt/pgp_sym_decrypt run inline in Postgres.
+--
+-- Supabase installs pgcrypto into the "extensions" schema, so every
+-- pgcrypto call is qualified as extensions.pgp_sym_* and each function
+-- sets search_path = public, extensions as a belt-and-braces measure.
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ── Primitive encrypt / decrypt helpers ────────────────────────────────────
 -- Return ciphertext as base64-encoded text so PostgREST can marshal it
@@ -13,18 +17,18 @@ create or replace function public.saas_encrypt(p_plaintext text, p_key text)
 returns text
 language sql
 security definer
-set search_path = public, pg_temp
+set search_path = public, extensions
 as $$
-    select encode(pgp_sym_encrypt(p_plaintext, p_key), 'base64');
+    select encode(extensions.pgp_sym_encrypt(p_plaintext, p_key), 'base64');
 $$;
 
 create or replace function public.saas_decrypt(p_ciphertext text, p_key text)
 returns text
 language sql
 security definer
-set search_path = public, pg_temp
+set search_path = public, extensions
 as $$
-    select pgp_sym_decrypt(decode(p_ciphertext, 'base64')::bytea, p_key);
+    select extensions.pgp_sym_decrypt(decode(p_ciphertext, 'base64')::bytea, p_key);
 $$;
 
 -- ── Atomic store / load ────────────────────────────────────────────────────
@@ -42,7 +46,7 @@ create or replace function public.saas_store_connection(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = public, extensions
 as $$
 declare
     v_id uuid;
@@ -55,7 +59,7 @@ begin
         p_app_slug,
         p_app_name,
         p_connection_type,
-        pgp_sym_encrypt(p_plaintext_json, p_key)
+        extensions.pgp_sym_encrypt(p_plaintext_json, p_key)
     )
     returning id into v_id;
     return v_id;
@@ -74,7 +78,7 @@ create or replace function public.saas_load_credentials(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = public, extensions
 as $$
 declare
     v_cipher bytea;
@@ -87,7 +91,7 @@ begin
         return null;
     end if;
 
-    return pgp_sym_decrypt(v_cipher, p_key)::jsonb;
+    return extensions.pgp_sym_decrypt(v_cipher, p_key)::jsonb;
 end;
 $$;
 
