@@ -579,6 +579,8 @@ export default function DashboardPage() {
     switch(fixType) {
       case 'auto':
         return <span className="text-xs px-2 py-1 rounded font-medium bg-green-900/50 text-green-300">Auto-fixed</span>
+      case 'info':
+        return <span className="text-xs px-2 py-1 rounded font-medium bg-green-900/50 text-green-300">Passed</span>
       case 'voice':
         return (
           <button onClick={() => setVoiceFinding(finding)} className="text-xs px-2 py-1 rounded font-medium bg-amber-900/50 text-amber-300 hover:bg-amber-900">
@@ -951,7 +953,7 @@ export default function DashboardPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-500 text-xs mt-1">{finding.description?.substring(0, 120)}...</p>
+                        <p className="text-gray-500 text-xs mt-1">{finding.description && finding.description.length > 200 ? `${finding.description.substring(0, 200)}...` : finding.description}</p>
                         {finding.governance_gap && <p className="text-gray-600 text-xs italic mt-2">{finding.governance_gap}</p>}
                         {finding.regulations && finding.regulations.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">

@@ -77,7 +77,40 @@ async def _graph_get(token: str, path: str, params: dict = None) -> dict:
         return resp.json()
 
 
+def _migrate_legacy_governance_gaps(tenant_id: str) -> None:
+    """One-time cleanup: existing MS365 findings with governance_gap stored as
+    boolean true are rewritten to a descriptive string based on the title."""
+    try:
+        existing = supabase_admin.table("findings")\
+            .select("id, title, governance_gap")\
+            .eq("tenant_id", tenant_id)\
+            .eq("engine", "microsoft365")\
+            .execute()
+        for row in existing.data or []:
+            gap = row.get("governance_gap")
+            if gap is True or (isinstance(gap, str) and gap.lower() == "true"):
+                title = (row.get("title") or "").lower()
+                if "mfa" in title:
+                    new_gap = "No policy mandates multi-factor authentication for all staff."
+                elif "inactive" in title:
+                    new_gap = "No formal offboarding process exists to disable accounts when staff leave."
+                elif "admin privileges" in title:
+                    new_gap = "No formal privileged access management policy exists."
+                elif "shared externally" in title:
+                    new_gap = "No policy governs external file sharing in SharePoint or OneDrive."
+                else:
+                    new_gap = "No formal governance policy exists for this control."
+                supabase_admin.table("findings")\
+                    .update({"governance_gap": new_gap})\
+                    .eq("id", row["id"])\
+                    .execute()
+    except Exception as e:
+        print(f"[MS365] Legacy governance_gap migration failed: {e}")
+
+
 async def run_ms365_scan(tenant_id: str, scan_id: str) -> dict:
+    _migrate_legacy_governance_gaps(tenant_id)
+
     result = supabase_admin.table("integrations")\
         .select("*")\
         .eq("tenant_id", tenant_id)\
