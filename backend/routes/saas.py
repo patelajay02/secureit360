@@ -244,6 +244,56 @@ def scan_connection(connection_id: str, authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+# ── Public app catalog ──────────────────────────────────────────────────────
+# Read-only, unauthenticated — the registry is catalog data. The frontend
+# catalog page calls this to render connect tiles.
+
+@router.get("/apps")
+def list_apps():
+    r = (
+        supabase_admin.table("saas_app_registry")
+        .select("slug, name, logo_url, tier, verified, wizard_recipe, generic_check_capabilities")
+        .order("name")
+        .execute()
+    )
+    return {"apps": r.data or []}
+
+
+# ── All findings across caller's connections ───────────────────────────────
+
+@router.get("/findings")
+def list_findings(authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    conns = (
+        supabase_admin.table("saas_connections")
+        .select("id, app_slug, app_name")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    conn_rows = conns.data or []
+    if not conn_rows:
+        return {"findings": []}
+
+    conn_ids = [c["id"] for c in conn_rows]
+    conn_map = {c["id"]: c for c in conn_rows}
+
+    r = (
+        supabase_admin.table("saas_findings")
+        .select("*")
+        .in_("connection_id", conn_ids)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    findings = []
+    for f in r.data or []:
+        conn = conn_map.get(f.get("connection_id")) or {}
+        f["app_slug"] = conn.get("app_slug")
+        f["app_name"] = conn.get("app_name")
+        findings.append(f)
+    return {"findings": findings}
+
+
 # ── List connections ────────────────────────────────────────────────────────
 
 @router.get("/connections")

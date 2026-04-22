@@ -22,6 +22,7 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/saas/connections", label: "SaaS Tools" },
     { href: "/settings", label: "Settings" },
   ];
 
