@@ -23,7 +23,7 @@ from routes.tenants import router as tenants_router
 from routes.integrations import router as integrations_router
 from routes.google_workspace import router as google_workspace_router
 from routes.threat_intel import router as threat_intel_router
-from routers.saas import router as saas_router
+from routes.saas import router as saas_router
 
 # Import scheduler
 from services.scheduler import start_scheduler, send_weekly_email_for_tenant
