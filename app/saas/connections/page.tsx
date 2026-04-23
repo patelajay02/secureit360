@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -173,7 +173,9 @@ function prettySlug(slug: string): string {
 export default function SaasConnectionsPage() {
   return (
     <ToastProvider>
-      <ConnectionsInner />
+      <Suspense fallback={null}>
+        <ConnectionsInner />
+      </Suspense>
     </ToastProvider>
   );
 }
