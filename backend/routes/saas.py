@@ -244,7 +244,7 @@ def generate_recipe_endpoint(
             status_code=422,
             detail=(
                 f"We couldn't auto-generate a guide for {app_name} — please "
-                "email governance@secureit360.co and we'll add it for you."
+                "email support@secureit360.co and we'll add it for you."
             ),
         )
     return row

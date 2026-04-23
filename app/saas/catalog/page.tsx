@@ -92,7 +92,7 @@ function CatalogInner() {
       if (!resp.ok) {
         throw new Error(
           data.detail ||
-            `We couldn't auto-generate a guide for ${appName}. Please email governance@secureit360.co.`
+            `We couldn't auto-generate a guide for ${appName}. Please email support@secureit360.co.`
         );
       }
       // `data` is the saved saas_app_registry row. Drop it into wizard
@@ -163,10 +163,10 @@ function CatalogInner() {
                   <span className="text-amber-200 font-medium">{wizardApp.name}</span>
                   {". Email feedback to "}
                   <a
-                    href="mailto:governance@secureit360.co"
+                    href="mailto:support@secureit360.co"
                     className="underline hover:text-white"
                   >
-                    governance@secureit360.co
+                    support@secureit360.co
                   </a>
                   .
                 </div>
