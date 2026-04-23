@@ -155,7 +155,11 @@ function ConnectionsInner() {
                 <p className="text-gray-400 text-sm">Loading findings…</p>
               </div>
             ) : (
-              <FindingsList findings={findings as any} />
+              <FindingsList
+                findings={findings as any}
+                onChanged={load}
+                onToast={addToast as any}
+              />
             )}
           </div>
         </div>

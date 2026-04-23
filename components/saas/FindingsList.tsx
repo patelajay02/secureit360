@@ -15,6 +15,13 @@ type Finding = {
   created_at: string;
   app_name?: string;
   app_slug?: string;
+  auto_fixable?: boolean;
+};
+
+type Props = {
+  findings: Finding[];
+  onChanged?: () => void | Promise<void>;
+  onToast?: (message: string, type?: "success" | "error" | "info") => void;
 };
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"] as const;
@@ -26,7 +33,7 @@ const SEVERITY_HEADINGS: Record<string, string> = {
   info: "Checks that passed",
 };
 
-export default function FindingsList({ findings }: { findings: Finding[] }) {
+export default function FindingsList({ findings, onChanged, onToast }: Props) {
   if (!findings || findings.length === 0) {
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
@@ -102,7 +109,11 @@ export default function FindingsList({ findings }: { findings: Finding[] }) {
                       ))}
                     </div>
                   )}
-                  <FindingActions finding={f} />
+                  <FindingActions
+                    finding={f}
+                    onChanged={onChanged}
+                    onToast={onToast}
+                  />
                 </div>
               ))}
             </div>

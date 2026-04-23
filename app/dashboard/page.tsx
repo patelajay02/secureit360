@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import FindingActionsBar from '../../components/findings/FindingActionsBar'
 
 const VOICE_GUIDE_STEPS: Record<string, string[]> = {
   "Scammers can send emails pretending to be your business": [
@@ -470,6 +471,8 @@ export default function DashboardPage() {
   const [reauthPending, setReauthPending] = useState<any>(null)
   const [detailsFinding, setDetailsFinding] = useState<any>(null)
   const [passedExpanded, setPassedExpanded] = useState(false)
+  const [autoFixingId, setAutoFixingId] = useState<string | null>(null)
+  const [actionFeedback, setActionFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null)
 
   function handleViewDetails(finding: any) {
     if (isReauthValid()) {
@@ -526,6 +529,34 @@ export default function DashboardPage() {
     router.push('/')
   }
 
+  useEffect(() => {
+    if (!actionFeedback) return
+    const t = setTimeout(() => setActionFeedback(null), 4000)
+    return () => clearTimeout(t)
+  }, [actionFeedback])
+
+  const handleAutoFix = async (finding: any) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    setAutoFixingId(finding.id)
+    try {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scans/auto-fix/${finding.id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        throw new Error(data.detail || 'Could not fix this finding')
+      }
+      setActionFeedback({message: data.message || 'Fixed.', type: 'success'})
+      await fetchDashboard(token)
+    } catch (e: any) {
+      setActionFeedback({message: e?.message || 'Could not fix this finding', type: 'error'})
+    } finally {
+      setAutoFixingId(null)
+    }
+  }
+
   const isTrial = status === 'trial'
 
   const getTrialDaysLeft = () => {
@@ -574,29 +605,6 @@ export default function DashboardPage() {
     if (liability === 'High') return 'text-red-400'
     if (liability === 'Medium') return 'text-amber-400'
     return 'text-green-400'
-  }
-
-  const getFixButton = (fixType: string, finding: any) => {
-    switch(fixType) {
-      case 'auto':
-        return <span className="text-xs px-2 py-1 rounded font-medium bg-green-900/50 text-green-300">Auto-fixed</span>
-      case 'info':
-        return <span className="text-xs px-2 py-1 rounded font-medium bg-green-900/50 text-green-300">Passed</span>
-      case 'voice':
-        return (
-          <button onClick={() => setVoiceFinding(finding)} className="text-xs px-2 py-1 rounded font-medium bg-amber-900/50 text-amber-300 hover:bg-amber-900">
-            Voice guide
-          </button>
-        )
-      case 'specialist':
-        return (
-          <button onClick={() => window.location.href = 'mailto:governance@secureit360.co'} className="text-xs px-2 py-1 rounded font-medium bg-red-900/50 text-red-300 hover:bg-red-900">
-            Get specialist
-          </button>
-        )
-      default:
-        return null
-    }
   }
 
   const getComplianceStatus = (score: number) => {
@@ -696,6 +704,17 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
+
+      {actionFeedback && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm ${
+            actionFeedback.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}
+          role="status"
+        >
+          {actionFeedback.message}
+        </div>
+      )}
 
       {voiceFinding && (
         <VoiceGuideModal finding={voiceFinding} onClose={() => setVoiceFinding(null)} />
@@ -956,11 +975,6 @@ export default function DashboardPage() {
                                 {isCarriedOver(finding) && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 border border-amber-800">Not fixed since last scan</span>
                                 )}
-                                {hasMeta && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-400 border border-blue-800/60">
-                                    🔒 Click to view affected users
-                                  </span>
-                                )}
                               </div>
                               <p className="text-gray-500 text-xs mt-1">{finding.description && finding.description.length > 200 ? `${finding.description.substring(0, 200)}...` : finding.description}</p>
                               {finding.governance_gap && <p className="text-gray-600 text-xs italic mt-2">{finding.governance_gap}</p>}
@@ -971,9 +985,14 @@ export default function DashboardPage() {
                                   ))}
                                 </div>
                               )}
-                              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                {getFixButton(finding.fix_type, finding)}
-                              </div>
+                              <FindingActionsBar
+                                autoFixable={!!finding.auto_fixable}
+                                autoFixBusy={autoFixingId === finding.id}
+                                onAutoFix={() => handleAutoFix(finding)}
+                                onVoiceGuide={() => setVoiceFinding(finding)}
+                                expertSubject={`Expert help: ${finding.title || 'finding'}`}
+                                expertBody={`${finding.title || ''}\n\n${finding.description || ''}`}
+                              />
                             </div>
                           </div>
                         </div>

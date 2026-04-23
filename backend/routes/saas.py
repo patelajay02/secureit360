@@ -23,6 +23,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from services.auto_fix import run_saas_fix
 from services.database import supabase_admin
 from saas_connectors.credential_vault import store_credentials
 from saas_connectors.providers import PROVIDER_REGISTRY
@@ -307,6 +308,55 @@ def list_connections(authorization: str = Header(...)):
         .execute()
     )
     return {"connections": r.data or []}
+
+
+# ── Auto-fix a SaaS finding ────────────────────────────────────────────────
+# Matches the scan-side /scans/auto-fix/{id} endpoint. No handlers are
+# registered today; current Xero + Zoho OAuth tokens are read-only so
+# every SaaS check fails the "can we realistically fix this" bar.
+
+@router.post("/findings/{finding_id}/auto-fix")
+def auto_fix_saas_finding(finding_id: str, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+
+    finding_r = (
+        supabase_admin.table("saas_findings")
+        .select("*")
+        .eq("id", finding_id)
+        .single()
+        .execute()
+    )
+    finding = finding_r.data
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    owner = (
+        supabase_admin.table("saas_connections")
+        .select("user_id")
+        .eq("id", finding["connection_id"])
+        .single()
+        .execute()
+    )
+    if not owner.data or owner.data["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    if not finding.get("auto_fixable"):
+        raise HTTPException(
+            status_code=400,
+            detail="This finding cannot be auto-fixed. It requires action on your side.",
+        )
+
+    try:
+        result = run_saas_fix(finding)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    supabase_admin.table("saas_findings").delete().eq("id", finding_id).execute()
+    return {
+        "message": result.get("message") or "Fixed.",
+        "finding_id": finding_id,
+        "status": "auto_resolved",
+    }
 
 
 # ── Disconnect ──────────────────────────────────────────────────────────────

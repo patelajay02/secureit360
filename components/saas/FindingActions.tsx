@@ -1,52 +1,67 @@
 "use client";
 
+// Per-SaaS-finding action block. Renders the shared FindingActionsBar
+// (Auto Fix / Voice Guide / Connect to Expert) plus a lightweight voice
+// modal that reads governance_statement + recommended_action via the
+// Web Speech API. SaaS findings do not have hand-crafted VOICE_GUIDE_STEPS
+// transcripts the way the main dashboard findings do.
+
 import { useEffect, useState } from "react";
 
-// Three action buttons shown under every SaaS finding.
-// Styling mirrors the dashboard's getFixButton (Auto / Voice guide /
-// Get specialist) so Auto Fix / Voice Guide / Connect to Expert read
-// identically across the two surfaces. Auto Fix stays disabled until a
-// SaaS finding actually supports automated remediation.
+import FindingActionsBar from "../findings/FindingActionsBar";
+import { authFetch } from "../../lib/auth";
 
 type Finding = {
+  id: string;
   check_id: string;
   severity: string;
   governance_statement: string;
   recommended_action: string;
   technical_detail?: string | null;
   app_name?: string;
+  auto_fixable?: boolean;
 };
 
-export default function FindingActions({ finding }: { finding: Finding }) {
+type Props = {
+  finding: Finding;
+  onChanged?: () => void | Promise<void>;
+  onToast?: (message: string, type?: "success" | "error" | "info") => void;
+};
+
+export default function FindingActions({ finding, onChanged, onToast }: Props) {
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [fixing, setFixing] = useState(false);
+
+  const handleAutoFix = async () => {
+    setFixing(true);
+    try {
+      const resp = await authFetch(`/saas/findings/${finding.id}/auto-fix`, {
+        method: "POST",
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not fix this finding");
+      }
+      const data = await resp.json();
+      onToast?.(data.message || "Fixed.", "success");
+      await onChanged?.();
+    } catch (e: any) {
+      onToast?.(e?.message || "Could not fix this finding", "error");
+    } finally {
+      setFixing(false);
+    }
+  };
 
   return (
     <>
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          disabled
-          title="Automated fixing isn't available for this finding yet"
-          className="text-xs px-2 py-1 rounded font-medium bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
-        >
-          Auto Fix
-        </button>
-        <button
-          type="button"
-          onClick={() => setVoiceOpen(true)}
-          className="text-xs px-2 py-1 rounded font-medium bg-amber-900/50 text-amber-300 hover:bg-amber-900"
-        >
-          Voice Guide
-        </button>
-        <a
-          href={`mailto:governance@secureit360.co?subject=${encodeURIComponent(
-            `Expert help: ${finding.app_name || "SaaS"} — ${finding.check_id}`
-          )}&body=${encodeURIComponent(finding.governance_statement)}`}
-          className="text-xs px-2 py-1 rounded font-medium bg-red-900/50 text-red-300 hover:bg-red-900"
-        >
-          Connect to Expert
-        </a>
-      </div>
+      <FindingActionsBar
+        autoFixable={!!finding.auto_fixable}
+        autoFixBusy={fixing}
+        onAutoFix={handleAutoFix}
+        onVoiceGuide={() => setVoiceOpen(true)}
+        expertSubject={`Expert help: ${finding.app_name || "SaaS"} — ${finding.check_id}`}
+        expertBody={finding.governance_statement}
+      />
       {voiceOpen && (
         <VoiceGuideModal finding={finding} onClose={() => setVoiceOpen(false)} />
       )}
@@ -65,7 +80,6 @@ function VoiceGuideModal({
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
-    // Safety: cancel any in-flight speech when the modal unmounts.
     return () => {
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();

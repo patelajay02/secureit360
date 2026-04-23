@@ -472,3 +472,64 @@ async def full_scan(data: ScanRequest, authorization: str = Header(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── AUTO-FIX ───────────────────────────────────────────────────────────────
+# Runs whatever handler is registered for the finding. Honest state today:
+# no handlers are registered (see services/auto_fix.py audit). This route
+# is the plumbing so a future engine-specific handler can plug in without
+# any UI changes.
+
+from services.auto_fix import run_scan_fix  # noqa: E402
+
+
+@router.post("/auto-fix/{finding_id}")
+def auto_fix_finding(finding_id: str, authorization: str = Header(...)):
+    try:
+        token = authorization.replace("Bearer ", "")
+        user = supabase.auth.get_user(token)
+        user_id = user.user.id
+
+        tenant_user = supabase_admin.table("tenant_users")\
+            .select("tenant_id")\
+            .eq("user_id", user_id)\
+            .eq("status", "active")\
+            .single()\
+            .execute()
+        tenant_id = tenant_user.data["tenant_id"]
+
+        finding_r = supabase_admin.table("findings")\
+            .select("*")\
+            .eq("id", finding_id)\
+            .eq("tenant_id", tenant_id)\
+            .single()\
+            .execute()
+        finding = finding_r.data
+        if not finding:
+            raise HTTPException(status_code=404, detail="Finding not found")
+        if not finding.get("auto_fixable"):
+            raise HTTPException(
+                status_code=400,
+                detail="This finding cannot be auto-fixed. It requires action on your side.",
+            )
+
+        result = run_scan_fix(finding)
+
+        supabase_admin.table("findings")\
+            .update({"status": "auto_resolved"})\
+            .eq("id", finding_id)\
+            .eq("tenant_id", tenant_id)\
+            .execute()
+
+        return {
+            "message": result.get("message") or "Fixed.",
+            "finding_id": finding_id,
+            "status": "auto_resolved",
+        }
+
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
