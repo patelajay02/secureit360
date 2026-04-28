@@ -126,6 +126,133 @@ def send_alert_email(company_name: str, to_email: str, findings: list):
     return send_email(to_email, subject, html_body)
 
 
+# ─── Real-time HIBP Critical Breach Alert ───────────────────────────────────
+# Fired by backend/services/hibp_watch.py within minutes of a new HIBP
+# breach being published that affects a verified tenant domain. Distinct
+# from send_alert_email above, which is the daily-scan-results format.
+
+def _human_relative(dt_str: str | None) -> str:
+    if not dt_str:
+        return "recently"
+    try:
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    except Exception:
+        return "recently"
+    now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+    delta = now - dt
+    secs = max(0, int(delta.total_seconds()))
+    if secs < 3600:
+        m = max(1, secs // 60)
+        return f"{m} minute{'s' if m != 1 else ''} ago"
+    if secs < 86_400:
+        h = secs // 3600
+        return f"{h} hour{'s' if h != 1 else ''} ago"
+    d = secs // 86_400
+    return f"{d} day{'s' if d != 1 else ''} ago"
+
+
+def send_critical_alert_email(
+    tenant_id: str,
+    breach_name: str,
+    affected_count: int,
+    *,
+    domain: str,
+    breach_date: str | None = None,
+    pwn_count: int | None = None,
+    breach_added_date: str | None = None,
+    to_email: str | None = None,
+) -> int | None:
+    # Resolve company_name and recipient if the caller didn't pre-fetch them.
+    company_name = "Your company"
+    try:
+        from services.database import supabase_admin  # local import: avoid circular at module load
+        t = (
+            supabase_admin.table("tenants")
+            .select("name, director_email")
+            .eq("id", tenant_id)
+            .single()
+            .execute()
+        )
+        if t.data:
+            company_name = t.data.get("name") or company_name
+            if not to_email:
+                to_email = t.data.get("director_email")
+    except Exception as e:
+        print(f"[critical alert] tenant lookup failed for {tenant_id}: {e}")
+
+    if not to_email:
+        print(f"[critical alert] no recipient email for tenant {tenant_id} — skipping")
+        return None
+
+    when_phrase = _human_relative(breach_added_date)
+    pwn_count_pretty = f"{pwn_count:,}" if isinstance(pwn_count, int) else "an unknown number of"
+    breach_date_pretty = breach_date or "Unknown"
+
+    subject = f"Critical: New data breach affecting {domain}"
+
+    governance_gap = (
+        "No formal process exists to monitor employee credentials against "
+        "breach databases."
+    )
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0; padding:0; background:#f9fafb; font-family: Arial, sans-serif;">
+        <div style="max-width:600px; margin:0 auto; padding:32px 16px;">
+
+            <div style="background:#111827; border-radius:12px 12px 0 0; padding:24px 32px;">
+                <h1 style="color:#fff; margin:0; font-size:22px;">
+                    SecureIT<span style="color:#dc2626;">360</span>
+                    <span style="color:#9ca3af; font-weight:400;"> Real-time Breach Alert</span>
+                </h1>
+                <p style="color:#6b7280; margin:4px 0 0 0; font-size:13px;">by Global Cyber Assurance</p>
+            </div>
+
+            <div style="background:#ffffff; padding:32px; border-left:1px solid #e5e7eb; border-right:1px solid #e5e7eb;">
+                <p style="color:#111827; font-size:16px; margin-top:0;">Hi {company_name} team,</p>
+
+                <p style="color:#374151; font-size:15px; line-height:1.6;">
+                    A new breach was published <strong>{when_phrase}</strong> affecting your verified domain
+                    <strong>{domain}</strong>.
+                    <strong>{affected_count}</strong> of your business email addresses appear in this breach.
+                </p>
+
+                <table style="width:100%; border-collapse:collapse; margin:16px 0; background:#fef2f2;
+                              border-radius:8px; border:1px solid #fee2e2;">
+                    <tr>
+                        <td style="padding:12px 16px; border-bottom:1px solid #fee2e2; color:#6b7280; font-size:13px; width:42%;">Breach name</td>
+                        <td style="padding:12px 16px; border-bottom:1px solid #fee2e2; color:#111827; font-size:14px; font-weight:600;">{breach_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:12px 16px; border-bottom:1px solid #fee2e2; color:#6b7280; font-size:13px;">Breach date</td>
+                        <td style="padding:12px 16px; border-bottom:1px solid #fee2e2; color:#111827; font-size:14px;">{breach_date_pretty}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:12px 16px; color:#6b7280; font-size:13px;">Total accounts in breach</td>
+                        <td style="padding:12px 16px; color:#111827; font-size:14px;">{pwn_count_pretty}</td>
+                    </tr>
+                </table>
+
+                <p style="color:#9ca3af; font-style:italic; font-size:13px; margin:18px 0 0 0;">
+                    {governance_gap}
+                </p>
+
+                <p style="color:#6b7280; font-size:13px; margin:18px 0 0 0;">
+                    For incident response support contact
+                    <a href="mailto:governance@globalcyberassurance.com" style="color:#6b7280;">governance@globalcyberassurance.com</a>
+                </p>
+            </div>
+
+            {footer_html(to_email)}
+        </div>
+    </body>
+    </html>
+    """
+
+    return send_email(to_email, subject, html_body)
+
+
 # ─── Score Improvement Email ──────────────────────────────────────────────────
 
 def send_score_improvement_email(company_name: str, to_email: str, old_score: int, new_score: int):
