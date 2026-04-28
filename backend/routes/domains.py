@@ -132,6 +132,21 @@ def verify_domain(data: VerifyRequest, authorization: str = Header(...)):
             .eq("id", data.domain_id)\
             .execute()
 
+        # Auto-register the domain with the real-time HIBP breach watch.
+        # ignore_duplicates=True so re-verifying a domain doesn't clobber
+        # the existing last_checked_breach_name marker (which would
+        # replay every historical breach as if brand new on the next
+        # 5-minute scheduler tick). Wrapped in try/except so a watch
+        # registration hiccup never causes the verification UX to fail.
+        try:
+            supabase_admin.table("hibp_breach_watch").upsert(
+                {"tenant_id": tenant_id, "domain": domain},
+                on_conflict="tenant_id,domain",
+                ignore_duplicates=True,
+            ).execute()
+        except Exception as e:
+            print(f"[domains/verify] hibp_breach_watch registration failed for {domain}: {e}")
+
         return {"verified": True, "message": "Domain verified successfully."}
 
     except HTTPException:
