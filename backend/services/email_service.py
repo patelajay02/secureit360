@@ -45,10 +45,10 @@ def footer_html(to_email: str) -> str:
                 border:1px solid #e5e7eb; border-top:none;">
         <p style="color:#6b7280; font-size:13px; margin:0 0 8px 0;">
             Some findings require policy and governance work to resolve permanently.
-            Contact us at <a href="mailto:{GOVERNANCE_EMAIL}" style="color:#dc2626;">{GOVERNANCE_EMAIL}</a> for guidance.
+            Contact us at <a href="mailto:{SUPPORT_EMAIL}" style="color:#dc2626;">{SUPPORT_EMAIL}</a> for guidance.
         </p>
         <p style="color:#9ca3af; font-size:12px; margin:0 0 8px 0;">
-            Global Cyber Assurance — SecureIT360 — Complete cyber protection for New Zealand businesses.
+            Global Cyber Assurance — SecureIT360 — Complete cyber protection for businesses in Australia, the UAE, India and New Zealand.
         </p>
         <p style="color:#9ca3af; font-size:11px; margin:0;">
             You are receiving this email because you have an active SecureIT360 account.<br>
