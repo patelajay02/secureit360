@@ -2,6 +2,8 @@
 # Country-aware: NZ and AU clients see different regulations and penalties
 # Penalties are indicative only - not legal advice
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, HTTPException, Header
 from services.database import supabase, supabase_admin
 
@@ -63,6 +65,52 @@ def _saas_director_delta(saas_findings: list) -> int:
         SAAS_SEVERITY_WEIGHT.get(f.get("severity"), 0)
         for f in saas_findings
     )
+
+
+def _fetch_breach_watch_payload(tenant_id: str) -> dict:
+    """Pull just enough HIBP breach-watch data to render BreachWatchTile.
+
+    Returned shape:
+        {
+            "watches":       [{domain, last_checked_at}, …],
+            "alerts_30d":    int,
+            "recent_alerts": [{breach_name, breach_date, pwn_count,
+                               affected_emails, alert_sent_at}, …]   (max 5)
+        }
+
+    Errors are swallowed and an empty payload is returned so a temporary
+    table read failure never blocks the rest of the dashboard.
+    """
+    out = {"watches": [], "alerts_30d": 0, "recent_alerts": []}
+    try:
+        watches = (
+            supabase_admin.table("hibp_breach_watch")
+            .select("domain, last_checked_at")
+            .eq("tenant_id", tenant_id)
+            .order("created_at")
+            .execute()
+        )
+        out["watches"] = watches.data or []
+    except Exception as e:
+        print(f"[dashboard] hibp_breach_watch read failed: {e}")
+        return out
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    try:
+        recent = (
+            supabase_admin.table("hibp_breach_alerts")
+            .select("breach_name, breach_date, pwn_count, affected_emails, alert_sent_at")
+            .eq("tenant_id", tenant_id)
+            .gte("alert_sent_at", cutoff)
+            .order("alert_sent_at", desc=True)
+            .execute()
+        )
+        rows = recent.data or []
+        out["alerts_30d"] = len(rows)
+        out["recent_alerts"] = rows[:5]
+    except Exception as e:
+        print(f"[dashboard] hibp_breach_alerts read failed: {e}")
+    return out
 
 
 def _saas_penalty_proxy(saas_findings: list) -> list:
@@ -432,6 +480,7 @@ def get_dashboard(authorization: str = Header(...)):
             .execute()
 
         saas_findings = _fetch_saas_findings_for_user(user_id)
+        breach_watch = _fetch_breach_watch_payload(tenant_id)
 
         if not findings.data and not saas_findings:
             return {
@@ -444,7 +493,8 @@ def get_dashboard(authorization: str = Header(...)):
                 "message": "No scans completed yet.",
                 "ransom_score": None,
                 "governance_score": None,
-                "findings_summary": None
+                "findings_summary": None,
+                "breach_watch": breach_watch,
             }
 
         scan_findings = findings.data or []
@@ -487,7 +537,8 @@ def get_dashboard(authorization: str = Header(...)):
             },
             "top_findings": scan_findings[:5],
             "compliance": compliance,
-            "penalty_info": penalty_info
+            "penalty_info": penalty_info,
+            "breach_watch": breach_watch,
         }
 
     except Exception as e:

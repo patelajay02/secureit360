@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import FindingActionsBar from '../../components/findings/FindingActionsBar'
+import BreachWatchTile from '../../components/dashboard/BreachWatchTile'
 
 const VOICE_GUIDE_STEPS: Record<string, string[]> = {
   "Scammers can send emails pretending to be your business": [
@@ -897,6 +898,10 @@ export default function DashboardPage() {
             </div>
           </>
         )}
+
+        <div className="mb-8">
+          <BreachWatchTile data={dashboard?.breach_watch} />
+        </div>
 
         <div className="bg-gray-900 border border-red-900/50 rounded-2xl p-5 mb-8 flex items-center justify-between gap-4">
           <div>
